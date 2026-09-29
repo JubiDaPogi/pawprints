@@ -31,6 +31,7 @@ $flashType   = get_flash_type();
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>(function(){try{var t=localStorage.getItem('pp-theme');if(t==='green'||t==='blue')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Security questions · Paw Prints Veterinary Clinic</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">

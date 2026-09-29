@@ -22,6 +22,7 @@ $question = $_SESSION['recover']['question'] ?? '';
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>(function(){try{var t=localStorage.getItem('pp-theme');if(t==='green'||t==='blue')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Account recovery · Paw Prints Veterinary Clinic</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -183,9 +184,22 @@ $question = $_SESSION['recover']['question'] ?? '';
     }
 
     btn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+
+    // Calling preventDefault() on touchstart (needed above, to keep the
+    // input focused) also suppresses the synthetic "click" event most
+    // mobile browsers would otherwise fire afterward — so the toggle has
+    // to happen on touchend directly, or a real tap does nothing at all.
+    var touchHandled = false;
     btn.addEventListener('touchstart', function (ev) { ev.preventDefault(); }, { passive: false });
+    btn.addEventListener('touchend', function (ev) {
+      ev.preventDefault();
+      touchHandled = true;
+      toggle(true);
+      setTimeout(function () { touchHandled = false; }, 400);
+    }, { passive: false });
 
     btn.addEventListener('click', function (ev) {
+      if (touchHandled) return;
       ev.preventDefault();
       var viaKeyboard = ev.detail === 0;
       toggle(!viaKeyboard);

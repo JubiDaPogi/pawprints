@@ -239,6 +239,9 @@ $flashType   = get_flash_type();
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Apply a saved color theme before first paint, so switching pages
+     never flashes back to red for a frame. -->
+<script>(function(){try{var t=localStorage.getItem('pp-theme');if(t==='green'||t==='blue')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= e($PAGE_TITLE) ?> · Paw Prints Veterinary Clinic</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -275,6 +278,11 @@ $flashType   = get_flash_type();
     </nav>
 
     <div class="vp-side-foot">
+      <div class="vp-theme-switch" role="group" aria-label="Color theme">
+        <button type="button" class="vp-theme-dot" data-theme-choice="red" aria-label="Red theme"></button>
+        <button type="button" class="vp-theme-dot" data-theme-choice="green" aria-label="Green theme"></button>
+        <button type="button" class="vp-theme-dot" data-theme-choice="blue" aria-label="Blue theme"></button>
+      </div>
       <a href="account.php" class="vp-user-chip <?= $staff ? 'staff' : 'owner' ?>" title="Manage your account">
         <div class="vp-user-avatar">
           <?php if ($staff): ?>

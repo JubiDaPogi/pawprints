@@ -36,15 +36,15 @@ try {
     // Friendly message instead of a raw stack trace
     die(
         '<div style="font-family:sans-serif;max-width:640px;margin:60px auto;padding:28px;'
-        . 'border:1px solid #e6e0d4;border-radius:14px;background:#fff;color:#1c2b29;line-height:1.6">'
-        . '<h2 style="margin-top:0;color:#0f4b45">Can\'t connect to the database</h2>'
+        . 'border:1px solid #e6e0d4;border-radius:14px;background:#fff;color:#2b1c1c;line-height:1.6">'
+        . '<h2 style="margin-top:0;color:#8b1e24">Can\'t connect to the database</h2>'
         . '<p>The app could not reach the <b>pawprints_db</b> database. Check that:</p>'
         . '<ul>'
         . '<li><b>MySQL</b> is running in the XAMPP Control Panel.</li>'
         . '<li>You imported <b>database.sql</b> through phpMyAdmin.</li>'
         . '<li>The settings in <code>config/database.php</code> match your MySQL setup.</li>'
         . '</ul>'
-        . '<p style="color:#7c8b88;font-size:14px">Technical detail: ' . htmlspecialchars($e->getMessage()) . '</p>'
+        . '<p style="color:#8b7c7c;font-size:14px">Technical detail: ' . htmlspecialchars($e->getMessage()) . '</p>'
         . '</div>'
     );
 }

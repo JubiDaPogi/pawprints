@@ -76,11 +76,15 @@ require 'includes/header.php';
         <?= e($p['species']) ?> · <?= e($p['breed']) ?> · <?= e($p['sex']) ?> · <?= age_from_birth($p['birth']) ?> · <?= e($p['color']) ?>
       </p>
       <div class="vp-chart-owner">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"/></svg>
-        <?= e(format_name_formal($p['owner_first'], $p['owner_middle'], $p['owner_last'])) ?>
+        <span class="vp-chart-owner-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"/></svg>
+          <?= e(format_name_formal($p['owner_first'], $p['owner_middle'], $p['owner_last'])) ?>
+        </span>
         <span class="vp-dot-sep">•</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>
-        <?= e($p['owner_phone']) ?>
+        <span class="vp-chart-owner-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>
+          <?= e($p['owner_phone']) ?>
+        </span>
       </div>
     </div>
   </div>
@@ -415,6 +419,15 @@ require 'includes/header.php';
     if (!name) return;
     var btn = document.querySelector('#recTabs button[data-tab="' + name + '"]');
     if (btn) showTab(btn, name);
+  })();
+
+  // On phones #recTabs scrolls horizontally, so whichever tab is active
+  // (the default first tab, or one opened via the hash above) needs to
+  // actually be in view — otherwise the row can land scrolled past it,
+  // with no highlighted tab visible at all.
+  (function () {
+    var active = document.querySelector('#recTabs button.active');
+    if (active) active.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   })();
 </script>
 

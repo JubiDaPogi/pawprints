@@ -24,6 +24,7 @@ $version = defined('PRIVACY_VERSION') ? PRIVACY_VERSION : '';
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>(function(){try{var t=localStorage.getItem('pp-theme');if(t==='green'||t==='blue')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Privacy Notice · <?= e($clinic) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">

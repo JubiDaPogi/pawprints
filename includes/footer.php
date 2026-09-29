@@ -6,8 +6,70 @@
         <?= e(defined('CLINIC_NAME') ? CLINIC_NAME : 'Paw Prints Veterinary Clinic') ?>.
       </div>
     </div><!-- /.vp-content -->
+
+    <!-- Back-to-top: .vp-content is its own scroll container (the page
+         itself doesn't scroll), so this listens to and scrolls that
+         element rather than the window. -->
+    <button type="button" class="vp-scroll-top" id="vpScrollTop" aria-label="Back to top" hidden>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    </button>
   </main>
 </div><!-- /.vp-root -->
+
+<!-- Color theme switcher. -->
+<script>
+(function () {
+  var switches = document.querySelectorAll('.vp-theme-switch');
+  if (!switches.length) return;
+  var current = document.documentElement.getAttribute('data-theme') || 'red';
+
+  function apply(theme) {
+    if (theme === 'red') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('pp-theme', theme); } catch (e) {}
+    switches.forEach(function (group) {
+      group.querySelectorAll('.vp-theme-dot').forEach(function (dot) {
+        dot.setAttribute('aria-pressed', dot.dataset.themeChoice === theme ? 'true' : 'false');
+      });
+    });
+  }
+
+  switches.forEach(function (group) {
+    group.querySelectorAll('.vp-theme-dot').forEach(function (dot) {
+      dot.setAttribute('aria-pressed', dot.dataset.themeChoice === current ? 'true' : 'false');
+      dot.addEventListener('click', function () { apply(dot.dataset.themeChoice); });
+    });
+  });
+})();
+</script>
+
+<!-- Back-to-top button behavior. -->
+<script>
+(function () {
+  var content = document.querySelector('.vp-content');
+  var btn = document.getElementById('vpScrollTop');
+  if (!content || !btn) return;
+
+  function onScroll() {
+    var show = content.scrollTop > 400;
+    if (show) btn.hidden = false;
+    // Let the fade/slide transition finish before actually removing it
+    // from layout when scrolling back up past the threshold.
+    requestAnimationFrame(function () { btn.classList.toggle('show', show); });
+    if (!show) {
+      clearTimeout(btn._hideTimer);
+      btn._hideTimer = setTimeout(function () { if (!btn.classList.contains('show')) btn.hidden = true; }, 200);
+    }
+  }
+
+  content.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  btn.addEventListener('click', function () {
+    content.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+})();
+</script>
 
 <!-- Stamp the exact print time into the letterhead when printing. -->
 <script>
@@ -197,10 +259,25 @@
     // Pointer/touch: don't let the press steal focus from the input,
     // which on mobile would dismiss the on-screen keyboard.
     btn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-    btn.addEventListener('touchstart', function (ev) { ev.preventDefault(); }, { passive: false });
 
-    // Click covers mouse, touch, and Enter/Space on a real <button>.
+    // Calling preventDefault() on touchstart (needed above, to keep the
+    // input focused) also suppresses the synthetic "click" event most
+    // mobile browsers would otherwise fire afterward — so the toggle has
+    // to happen on touchend directly, or a real tap does nothing at all.
+    // touchHandled guards against the rare browser that still fires a
+    // click on top of this.
+    var touchHandled = false;
+    btn.addEventListener('touchstart', function (ev) { ev.preventDefault(); }, { passive: false });
+    btn.addEventListener('touchend', function (ev) {
+      ev.preventDefault();
+      touchHandled = true;
+      toggle(true);
+      setTimeout(function () { touchHandled = false; }, 400);
+    }, { passive: false });
+
+    // Click covers mouse and Enter/Space on a real <button>.
     btn.addEventListener('click', function (ev) {
+      if (touchHandled) return;
       ev.preventDefault();
       // If activated by keyboard, keep focus on the button so the user
       // can toggle again; otherwise return the caret to the input.

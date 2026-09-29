@@ -20,6 +20,9 @@ unset($_SESSION['login_prefill']);
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Apply a saved color theme before first paint, so switching pages
+     never flashes back to red for a frame. -->
+<script>(function(){try{var t=localStorage.getItem('pp-theme');if(t==='green'||t==='blue')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sign in · Paw Prints Veterinary Clinic</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,6 +35,12 @@ unset($_SESSION['login_prefill']);
 </head>
 <body>
 <div class="vp-login">
+
+  <div class="vp-theme-switch vp-theme-switch-login" role="group" aria-label="Color theme">
+    <button type="button" class="vp-theme-dot" data-theme-choice="red" aria-label="Red theme"></button>
+    <button type="button" class="vp-theme-dot" data-theme-choice="green" aria-label="Green theme"></button>
+    <button type="button" class="vp-theme-dot" data-theme-choice="blue" aria-label="Blue theme"></button>
+  </div>
 
   <!-- Left art panel -->
   <div class="vp-login-art" aria-hidden="true">
@@ -134,10 +143,25 @@ unset($_SESSION['login_prefill']);
     // Pointer/touch: don't let the press steal focus from the input,
     // which on mobile would dismiss the on-screen keyboard.
     btn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-    btn.addEventListener('touchstart', function (ev) { ev.preventDefault(); }, { passive: false });
 
-    // Click covers mouse, touch, and Enter/Space on a real <button>.
+    // Calling preventDefault() on touchstart (needed above, to keep the
+    // input focused) also suppresses the synthetic "click" event most
+    // mobile browsers would otherwise fire afterward — so the toggle has
+    // to happen on touchend directly, or a real tap does nothing at all.
+    // touchHandled guards against the rare browser that still fires a
+    // click on top of this.
+    var touchHandled = false;
+    btn.addEventListener('touchstart', function (ev) { ev.preventDefault(); }, { passive: false });
+    btn.addEventListener('touchend', function (ev) {
+      ev.preventDefault();
+      touchHandled = true;
+      toggle(true);
+      setTimeout(function () { touchHandled = false; }, 400);
+    }, { passive: false });
+
+    // Click covers mouse and Enter/Space on a real <button>.
     btn.addEventListener('click', function (ev) {
+      if (touchHandled) return;
       ev.preventDefault();
       // If activated by keyboard, keep focus on the button so the user
       // can toggle again; otherwise return the caret to the input.
@@ -197,6 +221,33 @@ unset($_SESSION['login_prefill']);
       }
     }).observe(document.body, { childList: true, subtree: true });
   }
+})();
+</script>
+
+<!-- Color theme switcher. -->
+<script>
+(function () {
+  var switches = document.querySelectorAll('.vp-theme-switch');
+  if (!switches.length) return;
+  var current = document.documentElement.getAttribute('data-theme') || 'red';
+
+  function apply(theme) {
+    if (theme === 'red') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('pp-theme', theme); } catch (e) {}
+    switches.forEach(function (group) {
+      group.querySelectorAll('.vp-theme-dot').forEach(function (dot) {
+        dot.setAttribute('aria-pressed', dot.dataset.themeChoice === theme ? 'true' : 'false');
+      });
+    });
+  }
+
+  switches.forEach(function (group) {
+    group.querySelectorAll('.vp-theme-dot').forEach(function (dot) {
+      dot.setAttribute('aria-pressed', dot.dataset.themeChoice === current ? 'true' : 'false');
+      dot.addEventListener('click', function () { apply(dot.dataset.themeChoice); });
+    });
+  });
 })();
 </script>
 

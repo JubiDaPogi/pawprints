@@ -200,7 +200,7 @@ function render_patient_modal($modalId, $p, $owners, $speciesOptions = null) {
                           data-placeholder="Select an owner…"
                           data-search-placeholder="Search owner…">
                     <?php foreach ($owners as $o): ?>
-                      <option value="<?= (int)$o['id'] ?>" <?= $isEdit && (int)$p['owner_id'] === (int)$o['id'] ? 'selected' : '' ?>><?= e(build_full_name($o['first_name'], $o['middle_name'], $o['last_name'])) ?></option>
+                      <option value="<?= (int)$o['id'] ?>" <?= $isEdit && (int)$p['owner_id'] === (int)$o['id'] ? 'selected' : '' ?>><?= e(build_full_name($o['first_name'], $o['middle_name'], $o['last_name'])) ?><?= !empty($o['email']) ? ' · ' . e($o['email']) : '' ?></option>
                     <?php endforeach; ?>
                   </select>
                 </div>
@@ -325,19 +325,6 @@ function render_user_modal($modalId, $u, $owners, $selfId) {
             <?php endif; ?>
             <?php if ($isSelf): ?>
               <p class="vp-hint-text">Some options are locked because you're editing your own account — use another admin to change your role, status, or permissions.</p>
-            <?php endif; ?>
-
-            <?php if (!$isEdit): ?>
-              <!-- Data Privacy Act (RA 10173) consent. Unticked by default and
-                   required on the server before an account can be created. -->
-              <label class="vp-consent">
-                <input type="checkbox" name="privacy_consent" value="1" required>
-                <span>The person named above has read and agreed to the
-                  <a href="privacy.php" target="_blank" rel="noopener">Privacy Notice</a>,
-                  and consents to <?= e(defined('CLINIC_NAME') ? CLINIC_NAME : 'the clinic') ?>
-                  collecting and processing their personal data to provide veterinary care.
-                  <small>Required by the Data Privacy Act of 2012.</small></span>
-              </label>
             <?php endif; ?>
 
             <div class="vp-form-actions">

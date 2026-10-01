@@ -71,6 +71,8 @@ if ($staff) {
     ");
     $stmt->execute([$oid]);
     $myAppts = $stmt->fetchAll();
+
+    $speciesRows = $pdo->query("SELECT name FROM species WHERE deleted_at IS NULL ORDER BY name")->fetchAll();
 }
 
 require 'includes/header.php';
@@ -161,7 +163,13 @@ require 'includes/header.php';
     <div class="vp-owner-hero-icon"><svg width="54" height="54" viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="9" r="1.6"/><circle cx="10" cy="6.5" r="1.6"/><circle cx="14" cy="6.5" r="1.6"/><circle cx="18" cy="9" r="1.6"/><path d="M8 15c0-2.5 1.8-4 4-4s4 1.5 4 4c0 1.8-1.6 2.6-4 2.6S8 16.8 8 15z"/></svg></div>
   </div>
 
-  <h3 class="vp-section-h">Your pets</h3>
+  <div class="vp-section-row">
+    <h3 class="vp-section-h">Your pets</h3>
+    <button type="button" class="vp-btn-primary" data-open-modal="modal-add-pet">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      Add pet
+    </button>
+  </div>
   <div class="vp-pet-grid">
     <?php foreach ($myPets as $p):
         // No diagnosis blurb for owners — clinical findings stay with
@@ -181,6 +189,52 @@ require 'includes/header.php';
         <?= status_pill($a['status']) ?>
       </div>
     <?php endforeach; endif; ?>
+  </div>
+
+  <!-- Add pet modal (owner self-service). Vitals (weight/temp/heart) and
+       status aren't collected here — those are clinical fields the clinic
+       fills in at the first actual visit, so sensible baseline defaults
+       are used instead of asking the owner to guess them. -->
+  <div class="vp-modal-overlay" id="modal-add-pet">
+    <div class="vp-modal wide">
+      <div class="vp-modal-head">
+        <div><h3>Add a pet</h3><p>Tell us about your pet — the clinic will fill in the rest at your first visit.</p></div>
+        <button type="button" class="vp-modal-x" data-close-modal>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <form method="post" action="actions/create_pet.php">
+        <?= csrf_field() ?>
+        <div class="vp-modal-body">
+          <?= form_alert('pet-new') ?>
+          <div class="vp-form-grid">
+            <div class="vp-field"><label>Pet name</label><input name="name" placeholder="e.g. Bruno" required></div>
+            <div class="vp-field"><label>Species</label>
+              <select name="species">
+                <?php $spOpts = $speciesRows ? array_column($speciesRows, 'name') : ['Dog','Cat','Bird','Rabbit']; ?>
+                <?php foreach ($spOpts as $s): ?>
+                  <option><?= e($s) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="vp-field"><label>Breed</label><input name="breed" placeholder="e.g. Aspin" required></div>
+            <div class="vp-field"><label>Sex</label>
+              <select name="sex">
+                <option>Male</option>
+                <option>Female</option>
+              </select>
+            </div>
+            <div class="vp-field"><label>Color / markings</label><input name="color" placeholder="e.g. Brown/White"></div>
+            <div class="vp-field"><label>Date of birth <small>(if known)</small></label><input type="date" name="birth"></div>
+            <div class="vp-field full"><label>Allergies <small>(if any)</small></label><input name="allergies" placeholder="None known"></div>
+          </div>
+          <div class="vp-form-actions">
+            <button type="button" class="vp-btn-ghost" data-close-modal>Cancel</button>
+            <button type="submit" class="vp-btn-primary">Add pet</button>
+          </div>
+        </div>
+      </form>
+    </div>
   </div>
 
 <?php endif; ?>

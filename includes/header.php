@@ -43,6 +43,33 @@ $PAGE_TITLE = $PAGE_TITLE ?? 'Paw Prints';
 $navNotifs = [];
 $today     = date('Y-m-d');
 
+// --- 0. Pending appointment requests (staff only) -------------------
+// Owner-submitted requests waiting on approval — these need action, so
+// they're listed first regardless of how soon the requested day is.
+if ($staff) {
+    $nStmt = $pdo->prepare(
+        "SELECT a.*, p.name AS pet, p.species, p.breed,
+                o.first_name AS owner_first, o.middle_name AS owner_middle, o.last_name AS owner_last
+         FROM appointments a
+         JOIN patients p ON p.id = a.patient_id
+         JOIN owners o ON o.id = p.owner_id
+         WHERE a.status='Pending' AND p.deleted_at IS NULL
+         ORDER BY a.appt_date, a.appt_time"
+    );
+    $nStmt->execute();
+    foreach ($nStmt->fetchAll() as $r) {
+        $navNotifs[] = [
+            'icon'   => 'cal',
+            'tone'   => 'pending',
+            'owner'  => format_name_formal($r['owner_first'], $r['owner_middle'], $r['owner_last']),
+            'pet'    => $r['pet'] . ' · ' . $r['species'] . ' · ' . $r['breed'],
+            'detail' => 'Requested: ' . ($r['reason'] ?: 'Appointment'),
+            'meta'   => fmt_date($r['appt_date']) . ' at ' . fmt_time($r['appt_time']),
+            'href'   => 'appointments.php?status=Pending',
+        ];
+    }
+}
+
 // --- 1. Appointments today -----------------------------------------
 if ($staff) {
     $nStmt = $pdo->prepare(
@@ -278,10 +305,15 @@ $flashType   = get_flash_type();
     </nav>
 
     <div class="vp-side-foot">
-      <div class="vp-theme-switch" role="group" aria-label="Color theme">
-        <button type="button" class="vp-theme-dot" data-theme-choice="red" aria-label="Red theme"></button>
-        <button type="button" class="vp-theme-dot" data-theme-choice="green" aria-label="Green theme"></button>
-        <button type="button" class="vp-theme-dot" data-theme-choice="blue" aria-label="Blue theme"></button>
+      <div class="vp-theme-switch">
+        <button type="button" class="vp-theme-trigger" aria-haspopup="true" aria-expanded="false" aria-label="Choose color theme">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <div class="vp-theme-panel" role="group" aria-label="Color theme" hidden>
+          <button type="button" class="vp-theme-dot" data-theme-choice="red" aria-label="Red theme"></button>
+          <button type="button" class="vp-theme-dot" data-theme-choice="green" aria-label="Green theme"></button>
+          <button type="button" class="vp-theme-dot" data-theme-choice="blue" aria-label="Blue theme"></button>
+        </div>
       </div>
       <a href="account.php" class="vp-user-chip <?= $staff ? 'staff' : 'owner' ?>" title="Manage your account">
         <div class="vp-user-avatar">
@@ -307,6 +339,7 @@ $flashType   = get_flash_type();
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
         Sign out
       </a>
+      <div class="vp-side-version">v<?= e(APP_VERSION) ?></div>
     </div>
   </aside>
 

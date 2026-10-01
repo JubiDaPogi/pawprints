@@ -191,30 +191,64 @@
     .vp-nav-mark { position:absolute; left:-16px; top:50%; transform:translateY(-50%); width:4px; height:22px; background:var(--amber); border-radius:0 4px 4px 0; }
     .vp-side-foot { border-top:1px solid rgba(255,255,255,.09); padding-top:16px; }
     /* ---------- THEME SWITCH ---------- */
-    /* Swatches are deliberately hardcoded, not var(--pine) — each dot must
-       always show ITS OWN color as an option, regardless of which theme
-       is currently active. */
-    .vp-theme-switch { display:flex; align-items:center; justify-content:center; gap:9px; margin-bottom:14px; }
+    /* A single swatch button that always shows the CURRENT theme's color
+       (plain var(--pine), so it updates for free when the theme changes),
+       opening a small popover with the 3 choices on click — same
+       trigger+panel interaction as the notification bell. */
+    .vp-theme-switch { position:relative; display:flex; justify-content:center; margin-bottom:14px; }
+    .vp-theme-trigger {
+      width:26px; height:26px; border-radius:50%; padding:0; flex-shrink:0;
+      display:grid; place-items:center; color:#fff;
+      background:var(--pine); border:2px solid rgba(255,255,255,.4);
+      transition:transform .14s, background .14s, border-color .14s, color .14s;
+    }
+    .vp-theme-trigger:hover { transform:scale(1.08); }
+    .vp-theme-trigger:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+    /* Open: the circle itself disappears — background and border fade
+       out — leaving just the bare "x" mark, rather than an x drawn on
+       top of a still-visible circle. */
+    .vp-theme-trigger[aria-expanded="true"] {
+      background:transparent; border-color:transparent;
+    }
+    .vp-theme-trigger svg { opacity:0; transition:opacity .14s; }
+    .vp-theme-trigger[aria-expanded="true"] svg { opacity:1; }
+    /* The sign-in page's trigger sits over its light form panel, not a
+       dark sidebar, so a white "x" would vanish there once the colored
+       circle behind it is gone — darken it only in that context. */
+    .vp-theme-switch-login .vp-theme-trigger[aria-expanded="true"] { color:var(--ink); }
+    /* No card/pill behind the choices — just the three swatches
+       themselves, floating free. */
+    .vp-theme-panel {
+      position:absolute; bottom:calc(100% + 10px); left:50%; transform:translateX(-50%);
+      display:flex; align-items:center; gap:9px; z-index:30;
+    }
+    .vp-theme-panel[hidden] { display:none; }
+    /* Swatches are deliberately hardcoded, not var(--pine) — each dot
+       must always show ITS OWN color as an option, regardless of which
+       theme is currently active. Sized to match the trigger circle, and
+       shadowed (rather than bordered) for separation now that there's
+       no card background behind them to contrast against. */
     .vp-theme-dot {
-      width:20px; height:20px; border-radius:50%; padding:0; flex-shrink:0;
-      border:2px solid rgba(255,255,255,.35); box-shadow:0 0 0 2px transparent;
-      transition:transform .14s, box-shadow .14s, border-color .14s;
+      width:26px; height:26px; border-radius:50%; padding:0; flex-shrink:0;
+      border:2px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.3);
+      transition:transform .14s, box-shadow .14s;
     }
     .vp-theme-dot[data-theme-choice="red"]   { background:#8b1e24; }
     .vp-theme-dot[data-theme-choice="green"] { background:#0f4b45; }
     .vp-theme-dot[data-theme-choice="blue"]  { background:#1c4c8c; }
     .vp-theme-dot:hover { transform:scale(1.15); }
-    .vp-theme-dot[aria-pressed="true"] { border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
-    .vp-theme-dot:focus-visible { outline:2px solid #fff; outline-offset:2px; }
-    /* On the sign-in page there's no sidebar to dock it in, so it floats
-       in the corner instead — dark dots read fine against either the
-       art panel or the light form panel it can end up over on mobile. */
+    .vp-theme-dot[aria-pressed="true"] { box-shadow:0 0 0 2px var(--ink), 0 2px 8px rgba(0,0,0,.3); }
+    .vp-theme-dot:focus-visible { outline:2px solid var(--teal); outline-offset:2px; }
+    /* On the sign-in page the trigger floats near the top-RIGHT corner,
+       with plenty of open space to its left — so instead of opening
+       above/below like the sidebar, the panel opens sideways to the
+       left, level with ("tapat" ng) the circle. */
     .vp-theme-switch.vp-theme-switch-login {
       position:fixed; top:20px; right:20px; z-index:20; margin:0;
-      padding:8px 10px; background:rgba(255,255,255,.14); backdrop-filter:blur(6px);
-      border-radius:99px;
     }
-    .vp-theme-switch-login .vp-theme-dot { border-color:rgba(255,255,255,.5); }
+    .vp-theme-switch-login .vp-theme-panel {
+      bottom:auto; left:auto; right:calc(100% + 10px); top:50%; transform:translateY(-50%);
+    }
     .vp-user-chip { display:flex; align-items:center; gap:11px; padding:10px; border-radius:12px; background:rgba(255,255,255,.05); margin-bottom:10px; text-decoration:none; transition:background .15s ease; }
     .vp-user-chip:hover { background:rgba(255,255,255,.09); }
     .vp-user-avatar { width:36px; height:36px; border-radius:10px; display:grid; place-items:center; flex-shrink:0; }
@@ -225,6 +259,7 @@
     .vp-user-meta span { font-size:11.5px; color:var(--onbrand-dim); }
     .vp-logout { display:flex; align-items:center; gap:9px; width:100%; padding:11px 12px; border-radius:10px; color:var(--onbrand-muted); font-size:13.5px; font-weight:500; transition:.15s; }
     .vp-logout:hover { background:rgba(255,255,255,.06); color:#fff; }
+    .vp-side-version { margin-top:10px; text-align:center; font-size:10.5px; letter-spacing:.04em; color:var(--onbrand-dim); }
 
     /* ---------- MAIN ---------- */
     .vp-main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
@@ -242,6 +277,8 @@
     .vp-content { flex:1; overflow-y:auto; padding:28px 34px 40px; }
     .vp-stack { display:flex; flex-direction:column; gap:22px; max-width:1200px; }
     .vp-section-h { font-family:'Fraunces',serif; font-size:20px; font-weight:600; margin-top:4px; }
+    .vp-section-row { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .vp-section-row .vp-section-h { margin-top:0; }
 
     /* ---------- STAT CARDS ---------- */
     .vp-stat-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
@@ -566,13 +603,28 @@
 
     .vp-ss-list { max-height:240px; overflow-y:auto; padding:5px; }
     .vp-ss-group {
+      display:flex; flex-direction:column; gap:1px;
       font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
       color:var(--ink-3); padding:9px 10px 4px;
     }
     .vp-ss-opt {
+      display:flex; flex-direction:column; gap:1px;
       padding:8px 10px; border-radius:8px; font-size:13.5px; color:var(--ink);
       cursor:pointer; transition:background .1s;
     }
+    /* When a label carries a second, lesser detail (a pet's species, an
+       owner's email), it renders as a muted subtitle under the title
+       instead of running on after a "·" on the same line. */
+    .vp-ss-title { font-weight:600; }
+    .vp-ss-opt .vp-ss-subtitle { font-size:12px; font-weight:400; color:var(--ink-3); }
+    .vp-ss-group .vp-ss-title { text-transform:none; letter-spacing:normal; font-size:12.5px; color:var(--ink-2); }
+    .vp-ss-group .vp-ss-subtitle { text-transform:none; letter-spacing:normal; font-weight:400; font-size:11px; color:var(--ink-3); }
+    /* Giving these an explicit display:flex (for the title/subtitle stack)
+       overrides the browser's own [hidden]{display:none} rule — author
+       styles win over user-agent ones regardless of specificity — so the
+       search filter's row.hidden = true stopped actually hiding rows
+       until this was added back explicitly. */
+    .vp-ss-opt[hidden], .vp-ss-group[hidden] { display:none; }
     /* Indent options a touch when they sit under a group heading (owner). */
     .vp-ss-group + .vp-ss-opt, .vp-ss-opt + .vp-ss-opt { }
     .vp-ss-list .vp-ss-group ~ .vp-ss-opt { padding-left:18px; }
@@ -626,12 +678,11 @@
       .vp-nav-item { justify-content:center; }
       .vp-user-chip { justify-content:center; }
       .vp-logout { justify-content:center; }
-      /* 3 dots + gaps (~78px) don't fit the 74px/56px icon-only rail —
-         stack them instead of letting the row spill out into the content
-         area next to the sidebar. Scoped to the sidebar only: the
-         floating login-page pill has no such width constraint and
-         should stay a horizontal row at every size. */
-      .vp-side-foot .vp-theme-switch { flex-direction:column; gap:7px; }
+      /* The sidebar itself is now a narrow 74px icon rail — a horizontal
+         pill of 3 dots no longer fits inside it even centered, so stack
+         them instead. Position is unchanged (still centered, opening
+         upward); only the direction of the dots themselves changes. */
+      .vp-side-foot .vp-theme-panel { flex-direction:column; }
     }
     @media (max-width:680px) {
       .vp-content { padding:20px 16px 32px; }
@@ -1092,6 +1143,7 @@ button.vp-top-bell[aria-expanded="true"] {
 .vp-bell-item.tone-soon    .vp-bell-ico { background: var(--muted-bg); color: var(--teal); }
 .vp-bell-item.tone-overdue .vp-bell-ico { background: var(--warn-bg); color: var(--warn-fg); }
 .vp-bell-item.tone-care    .vp-bell-ico { background: var(--warn-bg); color: var(--amber); }
+.vp-bell-item.tone-pending .vp-bell-ico { background: var(--rose-soft); color: var(--rose); }
 .vp-bell-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .vp-bell-title {
   display: flex;
@@ -1695,6 +1747,11 @@ button.vp-top-bell[aria-expanded="true"] {
   text-decoration: none;
 }
 .vp-forgot-link:hover { color: var(--pine); text-decoration: underline; }
+
+/* "New here? Create an account" below the sign-in form. */
+.vp-login-signup { margin:18px 0 0; text-align:center; font-size:13.5px; color:var(--ink-3); }
+.vp-login-signup a { color:var(--pine); font-weight:600; text-decoration:none; }
+.vp-login-signup a:hover { text-decoration:underline; }
 
 /* Channel tag on the Reminders screen. */
 .vp-chan {

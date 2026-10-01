@@ -18,6 +18,10 @@ if (!defined('PRIVACY_CONTACT_EMAIL')) define('PRIVACY_CONTACT_EMAIL', 'privacy@
 if (!defined('PRIVACY_CONTACT_PHONE')) define('PRIVACY_CONTACT_PHONE', '(078) 000-0000');
 if (!defined('CLINIC_ADDRESS'))        define('CLINIC_ADDRESS', 'Bantug, Roxas, Isabela');
 
+/** The app build shown in the sidebar and on the sign-in page. Bump this
+ *  when shipping a meaningful round of changes. */
+if (!defined('APP_VERSION')) define('APP_VERSION', '1.0.0');
+
 /** Escape output for safe HTML rendering. */
 function e($value) {
     return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
@@ -76,10 +80,37 @@ function status_colors($status) {
     switch ($status) {
         case 'Active':
         case 'Scheduled':        return ['var(--ok-bg)',    'var(--ok-fg)'];
-        case 'Under Treatment':  return ['var(--warn-bg)',  'var(--warn-fg)'];
+        case 'Under Treatment':
+        case 'Pending':          return ['var(--warn-bg)',  'var(--warn-fg)'];
         case 'Completed':        return ['var(--muted-bg)', 'var(--muted-fg)'];
+        case 'Declined':         return ['var(--rose-soft)','var(--rose)'];
         default:                 return ['var(--muted-bg)', 'var(--muted-fg)'];
     }
+}
+
+/**
+ * The clinic's fixed appointment grid: one hour-long slot per start time,
+ * Monday–Saturday, 9am–4pm with a noon break. Both the staff "Schedule
+ * appointment" form and the owner "Request appointment" form book from
+ * this same list, so a slot can only ever be held by one appointment.
+ */
+function appointment_slots() {
+    return [
+        '09:00:00' => '9:00 – 10:00 AM',
+        '10:00:00' => '10:00 – 11:00 AM',
+        '11:00:00' => '11:00 AM – 12:00 PM',
+        '13:00:00' => '1:00 – 2:00 PM',
+        '14:00:00' => '2:00 – 3:00 PM',
+        '15:00:00' => '3:00 – 4:00 PM',
+    ];
+}
+
+/** True if $dateStr (Y-m-d) falls on a Monday through Saturday. */
+function is_valid_appt_weekday($dateStr) {
+    $ts = strtotime((string)$dateStr);
+    if ($ts === false) return false;
+    $dow = (int)date('N', $ts); // 1 = Monday ... 7 = Sunday
+    return $dow >= 1 && $dow <= 6;
 }
 
 /** Render a status pill. */
@@ -623,6 +654,9 @@ function audit_action_meta($action) {
         'vaccine_delete'   => ['Vaccine archived',    'rose'],
         'vaccine_restore'  => ['Vaccine restored',    'teal'],
         'appt_create'      => ['Appointment booked',  'teal'],
+        'appt_request'     => ['Appointment requested', 'amber'],
+        'appt_approve'     => ['Appointment approved', 'teal'],
+        'appt_decline'     => ['Appointment declined', 'rose'],
         'appt_complete'    => ['Appointment done',    'teal'],
         'user_restore'     => ['Account restored',    'teal'],
         'species_restore'  => ['Species restored',    'teal'],

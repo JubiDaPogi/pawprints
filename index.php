@@ -36,10 +36,15 @@ unset($_SESSION['login_prefill']);
 <body>
 <div class="vp-login">
 
-  <div class="vp-theme-switch vp-theme-switch-login" role="group" aria-label="Color theme">
-    <button type="button" class="vp-theme-dot" data-theme-choice="red" aria-label="Red theme"></button>
-    <button type="button" class="vp-theme-dot" data-theme-choice="green" aria-label="Green theme"></button>
-    <button type="button" class="vp-theme-dot" data-theme-choice="blue" aria-label="Blue theme"></button>
+  <div class="vp-theme-switch vp-theme-switch-login">
+    <button type="button" class="vp-theme-trigger" aria-haspopup="true" aria-expanded="false" aria-label="Choose color theme">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="vp-theme-panel" role="group" aria-label="Color theme" hidden>
+      <button type="button" class="vp-theme-dot" data-theme-choice="red" aria-label="Red theme"></button>
+      <button type="button" class="vp-theme-dot" data-theme-choice="green" aria-label="Green theme"></button>
+      <button type="button" class="vp-theme-dot" data-theme-choice="blue" aria-label="Blue theme"></button>
+    </div>
   </div>
 
   <!-- Left art panel -->
@@ -59,7 +64,7 @@ unset($_SESSION['login_prefill']);
         <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.5 1-1a5.5 5.5 0 0 0 0-7.9z"/></svg> Better continuity of care for every patient</li>
       </ul>
     </div>
-    <p class="vp-login-loc">Bantug, Roxas, Isabela · Est. record system 2026</p>
+    <p class="vp-login-loc">Bantug, Roxas, Isabela · Est. record system 2026 · v<?= e(APP_VERSION) ?></p>
   </div>
 
   <!-- Right form panel -->
@@ -88,6 +93,7 @@ unset($_SESSION['login_prefill']);
         </button>
       </form>
 
+      <p class="vp-login-signup">New user? <a href="signup.php">Register here</a></p>
     </div>
   </div>
 </div>
@@ -243,9 +249,32 @@ unset($_SESSION['login_prefill']);
   }
 
   switches.forEach(function (group) {
+    var trigger = group.querySelector('.vp-theme-trigger');
+    var panel = group.querySelector('.vp-theme-panel');
+
     group.querySelectorAll('.vp-theme-dot').forEach(function (dot) {
       dot.setAttribute('aria-pressed', dot.dataset.themeChoice === current ? 'true' : 'false');
-      dot.addEventListener('click', function () { apply(dot.dataset.themeChoice); });
+      dot.addEventListener('click', function () {
+        apply(dot.dataset.themeChoice);
+        if (panel) panel.hidden = true;
+        if (trigger) { trigger.setAttribute('aria-expanded', 'false'); trigger.focus(); }
+      });
+    });
+
+    if (!trigger || !panel) return;
+    function isOpen() { return !panel.hidden; }
+    function open() { panel.hidden = false; trigger.setAttribute('aria-expanded', 'true'); }
+    function close() { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); }
+
+    trigger.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      isOpen() ? close() : open();
+    });
+    document.addEventListener('click', function (ev) {
+      if (isOpen() && !panel.contains(ev.target) && !trigger.contains(ev.target)) close();
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && isOpen()) { close(); trigger.focus(); }
     });
   });
 })();

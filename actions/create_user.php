@@ -62,15 +62,11 @@ if ($role === 'owner' && $address === '') {
     set_form_error('user-new', 'An address is required for pet owners.');
     redirect('../users.php');
 }
-// Data Privacy Act (RA 10173): personal data may only be collected once the
-// data subject has agreed to the Privacy Notice. The HTML checkbox is a
-// convenience; this server check is what actually enforces it.
-if (empty($_POST['privacy_consent'])) {
-    set_form_error('user-new', 'Please confirm agreement to the Privacy Notice before creating the account.');
-    redirect('../users.php');
-}
-$consentAt  = date('Y-m-d H:i:s');
-$consentVer = defined('PRIVACY_VERSION') ? PRIVACY_VERSION : '';
+// Data Privacy Act (RA 10173): consent must come from the data subject
+// themselves, not be ticked by staff on their behalf — so it isn't
+// collected here. The account is created without it, and the person is
+// asked to read the Privacy Notice and agree at their own first sign-in
+// (see includes/auth.php: require_privacy_consent / privacy_consent.php).
 if ($err = login_email_problem($email))      { set_form_error('user-new', $err); redirect('../users.php'); }
 if ($err = temp_password_problem($password)) { set_form_error('user-new', $err); redirect('../users.php'); }
 
@@ -99,7 +95,6 @@ if ($ownerId !== null) {
 // creating a duplicate.
 // ------------------------------------------------------------------
 $ownerCreated = false;
-$hasConsentCols = has_privacy_consent_columns($pdo);
 if ($role === 'owner' && $ownerId === null) {
     $find = $pdo->prepare("SELECT id FROM owners WHERE LOWER(email) = LOWER(?) LIMIT 1");
     $find->execute([$email]);
@@ -107,23 +102,11 @@ if ($role === 'owner' && $ownerId === null) {
 
     if ($existing) {
         $ownerId = (int)$existing;
-        // Record the consent just given against the reused client record.
-        if ($hasConsentCols) {
-            $pdo->prepare("UPDATE owners SET privacy_consent_at = ?, privacy_consent_ver = ? WHERE id = ?")
-                ->execute([$consentAt, $consentVer, $ownerId]);
-        }
     } else {
-        if ($hasConsentCols) {
-            $ins = $pdo->prepare(
-                "INSERT INTO owners (first_name, middle_name, last_name, phone, email, address, privacy_consent_at, privacy_consent_ver) VALUES (?,?,?,?,?,?,?,?)"
-            );
-            $ins->execute([$first, $middle, $last, $phone, $email, $address, $consentAt, $consentVer]);
-        } else {
-            $ins = $pdo->prepare(
-                "INSERT INTO owners (first_name, middle_name, last_name, phone, email, address) VALUES (?,?,?,?,?,?)"
-            );
-            $ins->execute([$first, $middle, $last, $phone, $email, $address]);
-        }
+        $ins = $pdo->prepare(
+            "INSERT INTO owners (first_name, middle_name, last_name, phone, email, address) VALUES (?,?,?,?,?,?)"
+        );
+        $ins->execute([$first, $middle, $last, $phone, $email, $address]);
         $ownerId = (int)$pdo->lastInsertId();
         $ownerCreated = true;
     }
@@ -173,9 +156,6 @@ record_audit($pdo, 'user_create', $newId, $email,
 if ($canManage) {
     record_audit($pdo, 'permission_grant', $newId, $email, 'Granted user-management permission');
 }
-// Evidenced record of the Data Privacy Act consent captured on the form.
-record_audit($pdo, 'privacy_consent', $newId, $email,
-    'Privacy Notice (v' . ($consentVer !== '' ? $consentVer : '—') . ') agreed for ' . $full . ' at account creation');
 
 // Show the credentials once so staff can pass them on.
 set_flash('Account created. Username: ' . $email

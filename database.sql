@@ -195,7 +195,9 @@ CREATE TABLE appointments (
     appt_date   DATE NOT NULL,
     appt_time   TIME,
     reason      VARCHAR(200),
-    status      ENUM('Scheduled','Completed') DEFAULT 'Scheduled',
+    -- 'Pending' = requested by a pet owner, awaiting staff approval.
+    -- 'Declined' = staff turned down a pending request.
+    status      ENUM('Pending','Scheduled','Completed','Declined') DEFAULT 'Scheduled',
     FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 

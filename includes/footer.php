@@ -35,9 +35,32 @@
   }
 
   switches.forEach(function (group) {
+    var trigger = group.querySelector('.vp-theme-trigger');
+    var panel = group.querySelector('.vp-theme-panel');
+
     group.querySelectorAll('.vp-theme-dot').forEach(function (dot) {
       dot.setAttribute('aria-pressed', dot.dataset.themeChoice === current ? 'true' : 'false');
-      dot.addEventListener('click', function () { apply(dot.dataset.themeChoice); });
+      dot.addEventListener('click', function () {
+        apply(dot.dataset.themeChoice);
+        if (panel) panel.hidden = true;
+        if (trigger) { trigger.setAttribute('aria-expanded', 'false'); trigger.focus(); }
+      });
+    });
+
+    if (!trigger || !panel) return;
+    function isOpen() { return !panel.hidden; }
+    function open() { panel.hidden = false; trigger.setAttribute('aria-expanded', 'true'); }
+    function close() { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); }
+
+    trigger.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      isOpen() ? close() : open();
+    });
+    document.addEventListener('click', function (ev) {
+      if (isOpen() && !panel.contains(ev.target) && !trigger.contains(ev.target)) close();
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && isOpen()) { close(); trigger.focus(); }
     });
   });
 })();
@@ -749,6 +772,23 @@
     wrap.appendChild(panel);
     select.classList.add('vp-ss-native');
 
+    // A label built as "Title · Subtitle" (e.g. a pet name + species, or an
+    // owner's name + email) renders as two stacked lines instead of one
+    // run-on line — the " · " is just the server-side convention for
+    // "there's a second, lesser detail here," not literal text to show.
+    function renderTitleSub(el, text) {
+      var i = text.indexOf(' · ');
+      if (i === -1) { el.textContent = text; return; }
+      var title = document.createElement('span');
+      title.className = 'vp-ss-title';
+      title.textContent = text.slice(0, i);
+      var sub = document.createElement('span');
+      sub.className = 'vp-ss-subtitle';
+      sub.textContent = text.slice(i + 3);
+      el.appendChild(title);
+      el.appendChild(sub);
+    }
+
     // Mirror every real <option> as a clickable row, keeping <optgroup>
     // headings so a shared owner is shown only once.
     var rows = [];
@@ -757,7 +797,7 @@
       var row = document.createElement('div');
       row.className = 'vp-ss-opt';
       row.setAttribute('role', 'option');
-      row.textContent = opt.textContent;
+      renderTitleSub(row, opt.textContent);
       row.dataset.value = opt.value;
       // Search over the option text plus its group label (owner name).
       var grp = opt.parentNode && opt.parentNode.tagName === 'OPTGROUP'
@@ -772,7 +812,7 @@
       if (child.tagName === 'OPTGROUP') {
         var head = document.createElement('div');
         head.className = 'vp-ss-group';
-        head.textContent = child.label;
+        renderTitleSub(head, child.label);
         list.appendChild(head);
         Array.prototype.forEach.call(child.children, addOption);
       } else if (child.tagName === 'OPTION') {

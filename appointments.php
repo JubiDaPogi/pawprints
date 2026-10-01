@@ -47,7 +47,7 @@ $appts = $stmt->fetchAll();
 $allPatients = [];
 if ($staff) {
     $allPatients = $pdo->query("
-        SELECT p.id, p.name, p.species, o.id AS owner_id, CONCAT_WS(' ', NULLIF(o.first_name,''), NULLIF(o.middle_name,''), NULLIF(o.last_name,'')) AS owner_name, o.first_name AS owner_first, o.middle_name AS owner_middle, o.last_name AS owner_last
+        SELECT p.id, p.name, p.species, o.id AS owner_id, CONCAT_WS(' ', NULLIF(o.first_name,''), NULLIF(o.middle_name,''), NULLIF(o.last_name,'')) AS owner_name, o.first_name AS owner_first, o.middle_name AS owner_middle, o.last_name AS owner_last, o.email AS owner_email
         FROM patients p JOIN owners o ON o.id = p.owner_id WHERE p.deleted_at IS NULL
         ORDER BY o.last_name, o.first_name, o.id, p.name
     ")->fetchAll();
@@ -58,13 +58,31 @@ if ($staff) {
     foreach ($allPatients as $pt) {
         $oid = (int)$pt['owner_id'];
         if (!isset($patientsByOwner[$oid])) {
+            $label = format_name_formal($pt['owner_first'], $pt['owner_middle'], $pt['owner_last']);
+            if (!empty($pt['owner_email'])) $label .= ' · ' . $pt['owner_email'];
             $patientsByOwner[$oid] = [
-                'label' => format_name_formal($pt['owner_first'], $pt['owner_middle'], $pt['owner_last']),
+                'label' => $label,
                 'pets'  => [],
             ];
         }
         $patientsByOwner[$oid]['pets'][] = $pt;
     }
+}
+
+// This owner's own pets, for the "Request appointment" form.
+$myPets = [];
+if (!$staff) {
+    $myPets = $pdo->prepare("SELECT id, name, species FROM patients WHERE owner_id = ? AND deleted_at IS NULL ORDER BY name");
+    $myPets->execute([(int)$user['owner_id']]);
+    $myPets = $myPets->fetchAll();
+}
+$slots = appointment_slots();
+
+// Default to the next open day (skip Sunday) so both booking forms'
+// date fields never open on a day the clinic is closed.
+$defaultApptDate = date('Y-m-d', strtotime('+1 day'));
+if ((int)date('N', strtotime($defaultApptDate)) === 7) {
+    $defaultApptDate = date('Y-m-d', strtotime($defaultApptDate . ' +1 day'));
 }
 
 require 'includes/header.php';
@@ -78,7 +96,7 @@ require 'includes/header.php';
   <!-- Keeps the active status filter when the search box submits. -->
   <input type="hidden" name="status" value="<?= e($filter) ?>">
   <div class="vp-filter-chips">
-    <?php foreach (['All','Today','Scheduled','Completed'] as $f): ?>
+    <?php foreach (['All','Today','Pending','Scheduled','Completed'] as $f): ?>
       <!-- Carry the search term along so switching filters doesn't clear it. -->
       <a href="appointments.php?status=<?= $f ?><?= $q !== '' ? '&q=' . urlencode($q) : '' ?>" class="vp-chip <?= $filter === $f ? 'active' : '' ?>"><?= $f ?></a>
     <?php endforeach; ?>
@@ -87,6 +105,11 @@ require 'includes/header.php';
     <button type="button" class="vp-btn-primary" data-open-modal="modal-schedule">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
       Schedule appointment
+    </button>
+  <?php else: ?>
+    <button type="button" class="vp-btn-primary" data-open-modal="modal-request" <?= !$myPets ? 'disabled title="Add a pet to your account first"' : '' ?>>
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      Request appointment
     </button>
   <?php endif; ?>
 </form>
@@ -115,6 +138,23 @@ require 'includes/header.php';
           </div>
           <div class="vp-appt-full-actions">
             <?= status_pill($a['status']) ?>
+            <?php if ($staff && $a['status'] === 'Pending'): ?>
+              <form method="post" action="actions/approve_appointment.php" style="display:inline">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= (int)$a['id'] ?>">
+                <button type="submit" class="vp-btn-tiny">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Approve
+                </button>
+              </form>
+              <form method="post" action="actions/decline_appointment.php" style="display:inline"
+                    data-confirm="Decline this appointment request?">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= (int)$a['id'] ?>">
+                <button type="submit" class="vp-btn-tiny ghost">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg> Decline
+                </button>
+              </form>
+            <?php endif; ?>
             <?php if ($staff && $a['status'] === 'Scheduled'): ?>
               <form method="post" action="actions/complete_appointment.php" style="display:inline">
                 <?= csrf_field() ?>
@@ -157,8 +197,18 @@ require 'includes/header.php';
                 <?php endforeach; ?>
               </select>
             </div>
-            <div class="vp-field"><label>Date</label><input type="date" name="appt_date" value="<?= date('Y-m-d', strtotime('+1 day')) ?>"></div>
-            <div class="vp-field"><label>Time</label><input type="time" name="appt_time" value="10:00"></div>
+            <div class="vp-field"><label>Day <small>(Mon–Sat)</small></label>
+              <input type="date" name="appt_date" id="scheduleDate" required
+                     min="<?= date('Y-m-d') ?>" value="<?= e($defaultApptDate) ?>">
+              <small class="vp-field-note" id="scheduleDateNote"></small>
+            </div>
+            <div class="vp-field"><label>Time</label>
+              <select name="appt_time" required>
+                <?php foreach ($slots as $val => $label): ?>
+                  <option value="<?= e($val) ?>"><?= e($label) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
             <div class="vp-field full"><label>Reason</label><input name="reason" placeholder="e.g. Vaccination, check-up" required></div>
           </div>
           <div class="vp-form-actions">
@@ -169,6 +219,88 @@ require 'includes/header.php';
       </form>
     </div>
   </div>
+  <script>
+  (function () {
+    var dateInput = document.getElementById('scheduleDate');
+    var note = document.getElementById('scheduleDateNote');
+    if (!dateInput || !note) return;
+    function check() {
+      if (!dateInput.value) { note.textContent = ''; dateInput.setCustomValidity(''); return; }
+      var day = new Date(dateInput.value + 'T00:00:00').getDay(); // 0 = Sunday
+      if (day === 0) {
+        note.textContent = 'The clinic is closed Sundays — please choose Monday through Saturday.';
+        dateInput.setCustomValidity('Closed on Sundays');
+      } else {
+        note.textContent = '';
+        dateInput.setCustomValidity('');
+      }
+    }
+    dateInput.addEventListener('input', check);
+    dateInput.addEventListener('change', check);
+  })();
+  </script>
+<?php else: ?>
+  <!-- Request appointment modal (pet owner) -->
+  <div class="vp-modal-overlay" id="modal-request">
+    <div class="vp-modal">
+      <div class="vp-modal-head">
+        <div><h3>Request appointment</h3><p>Pick a day and time — the clinic will confirm it.</p></div>
+        <button type="button" class="vp-modal-x" data-close-modal><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <form method="post" action="actions/request_appointment.php" id="apptRequestForm">
+        <?= csrf_field() ?>
+        <div class="vp-modal-body">
+          <div class="vp-form-grid">
+            <div class="vp-field full"><label>Pet</label>
+              <select name="patient_id" required>
+                <?php foreach ($myPets as $pt): ?>
+                  <option value="<?= (int)$pt['id'] ?>"><?= e($pt['name']) ?> · <?= e($pt['species']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="vp-field"><label>Day <small>(Mon–Sat)</small></label>
+              <input type="date" name="appt_date" id="apptReqDate" required
+                     min="<?= date('Y-m-d') ?>" value="<?= e($defaultApptDate) ?>">
+              <small class="vp-field-note" id="apptReqDateNote"></small>
+            </div>
+            <div class="vp-field"><label>Time</label>
+              <select name="appt_time" required>
+                <?php foreach ($slots as $val => $label): ?>
+                  <option value="<?= e($val) ?>"><?= e($label) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="vp-field full"><label>Reason</label><input name="reason" placeholder="e.g. Vaccination, check-up" required></div>
+          </div>
+          <p class="vp-hint-text">Open Monday–Saturday, 9 AM–4 PM (closed 12–1 PM for lunch). Your pet's visit is confirmed once the clinic approves the request.</p>
+          <div class="vp-form-actions">
+            <button type="button" class="vp-btn-ghost" data-close-modal>Cancel</button>
+            <button type="submit" class="vp-btn-primary">Send request</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script>
+  (function () {
+    var dateInput = document.getElementById('apptReqDate');
+    var note = document.getElementById('apptReqDateNote');
+    if (!dateInput || !note) return;
+    function check() {
+      if (!dateInput.value) { note.textContent = ''; dateInput.setCustomValidity(''); return; }
+      var day = new Date(dateInput.value + 'T00:00:00').getDay(); // 0 = Sunday
+      if (day === 0) {
+        note.textContent = 'The clinic is closed Sundays — please choose Monday through Saturday.';
+        dateInput.setCustomValidity('Closed on Sundays');
+      } else {
+        note.textContent = '';
+        dateInput.setCustomValidity('');
+      }
+    }
+    dateInput.addEventListener('input', check);
+    dateInput.addEventListener('change', check);
+  })();
+  </script>
 <?php endif; ?>
 
 <?php require 'includes/footer.php'; ?>

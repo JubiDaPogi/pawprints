@@ -479,6 +479,7 @@
     .vp-appt-full-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
     .vp-appt-full-top { display:flex; align-items:center; gap:10px; min-width:0; }
     .vp-appt-full-top strong { min-width:0; flex-shrink:1; font-size:15.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .vp-appt-full-top strong .vp-appt-email { font-size:12.5px; font-weight:400; color:var(--ink-3); margin-left:4px; }
     .vp-appt-breed { min-width:0; flex-shrink:1; font-size:12.5px; color:var(--ink-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .vp-appt-reason { font-size:14px; color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .vp-appt-time { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink-3); }

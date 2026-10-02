@@ -116,7 +116,7 @@ require 'includes/header.php';
             $d = (int)$v['days'];
             $flag = $d < 0 ? 'over' : ($d < 21 ? 'soon' : '');
         ?>
-          <a class="vp-appt-row link" href="patient.php?id=<?= (int)$v['pid'] ?>">
+          <a class="vp-appt-row link" href="patient.php?id=<?= (int)$v['pid'] ?>#vacc">
             <div class="vp-due-flag <?= $flag ?>"><?= $d < 0 ? abs($d).'d overdue' : ($d === 0 ? 'Today' : 'in '.$d.'d') ?></div>
             <div class="vp-appt-info"><strong><?= e(format_name_formal($v['owner_first'], $v['owner_middle'], $v['owner_last'])) ?></strong><span><?= e($v['pet_name']) ?> · <?= e($v['species']) ?> · <?= e($v['breed']) ?> · <?= e($v['name']) ?></span></div>
             <span class="vp-due-date"><?= fmt_date($v['next_due']) ?></span>

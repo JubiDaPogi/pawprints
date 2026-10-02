@@ -183,7 +183,7 @@ foreach ($nStmt->fetchAll() as $r) {
         'pet'    => $r['pet'] . ' · ' . $r['species'] . ' · ' . $r['breed'],
         'detail' => $r['name'],
         'meta'   => ($overdue ? 'Overdue since ' : 'Due ') . fmt_date($r['next_due']),
-        'href'   => 'patient.php?id=' . (int)$r['pid'],
+        'href'   => 'patient.php?id=' . (int)$r['pid'] . '#vacc',
     ];
 }
 

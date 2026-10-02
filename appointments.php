@@ -14,7 +14,7 @@ $filter = $_GET['status'] ?? 'All';
 $q      = trim($_GET['q'] ?? '');
 
 // Build query — staff see all, owners see only their pets'.
-$sql = "SELECT a.*, p.name AS pet_name, p.species, p.breed, p.id AS pid, CONCAT_WS(' ', NULLIF(o.first_name,''), NULLIF(o.middle_name,''), NULLIF(o.last_name,'')) AS owner_name, o.first_name AS owner_first, o.middle_name AS owner_middle, o.last_name AS owner_last
+$sql = "SELECT a.*, p.name AS pet_name, p.species, p.breed, p.id AS pid, CONCAT_WS(' ', NULLIF(o.first_name,''), NULLIF(o.middle_name,''), NULLIF(o.last_name,'')) AS owner_name, o.first_name AS owner_first, o.middle_name AS owner_middle, o.last_name AS owner_last, o.email AS owner_email
         FROM appointments a
         JOIN patients p ON p.id = a.patient_id
         JOIN owners o ON o.id = p.owner_id
@@ -127,7 +127,14 @@ require 'includes/header.php';
           </div>
           <div class="vp-appt-full-info">
             <div class="vp-appt-full-top">
-              <strong><?= $staff ? e(format_name_formal($a['owner_first'], $a['owner_middle'], $a['owner_last'])) : e($a['pet_name']) ?></strong>
+              <strong>
+                <?php if ($staff): ?>
+                  <?= e(format_name_formal($a['owner_first'], $a['owner_middle'], $a['owner_last'])) ?>
+                  <?php if (!empty($a['owner_email'])): ?><span class="vp-appt-email"><?= e($a['owner_email']) ?></span><?php endif; ?>
+                <?php else: ?>
+                  <?= e($a['pet_name']) ?>
+                <?php endif; ?>
+              </strong>
               <span class="vp-appt-breed"><?php if ($staff): ?><?= e($a['pet_name']) ?> · <?php endif; ?><?= e($a['species']) ?> · <?= e($a['breed']) ?></span>
             </div>
             <span class="vp-appt-reason"><?= e($a['reason']) ?></span>

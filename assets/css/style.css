@@ -2792,3 +2792,18 @@ a.vp-cal-nav { display: inline-flex; align-items: center; justify-content: cente
 .vp-theme-side .vp-theme-trigger[aria-expanded="true"] { width: 26px; height: 26px; }
 .vp-top-right .vp-theme-trigger[aria-expanded="true"] svg,
 .vp-theme-side .vp-theme-trigger[aria-expanded="true"] svg { width: 26px; height: 26px; stroke-width: 2.6; }
+
+/* Phones: title on the left, bell + date/time stacked in the top-RIGHT corner. */
+@media (max-width: 680px) {
+  .vp-top { flex-wrap: nowrap !important; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .vp-top > div:first-child { flex: 1 1 auto; min-width: 0; }
+  .vp-top-title { overflow-wrap: anywhere; }
+  .vp-top-right { width: auto !important; flex: 0 0 auto; flex-direction: column; align-items: flex-end; gap: 8px; flex-wrap: nowrap; justify-content: flex-start; }
+  .vp-top-date { white-space: nowrap; }
+}
+@media (max-width: 680px) {
+  .vp-top-title { overflow-wrap: break-word !important; word-break: normal; font-size: 20px; line-height: 1.2; }
+  .vp-top-date { padding: 6px 9px; font-size: 11.5px; gap: 5px; }
+  .vp-top-date svg { width: 12px; height: 12px; }
+  .vp-top-bell { width: 38px; height: 38px; }
+}

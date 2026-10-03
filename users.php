@@ -66,7 +66,7 @@ require 'includes/header.php';
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
     <input type="text" name="q" value="<?= e($q) ?>" placeholder="Search by name or email…" oninput="document.getElementById('userFilter').submit()">
   </div>
-  <div class="vp-filter-chips">
+  <div class="vp-filter-chips" data-label="Role">
     <?php foreach ($roleTabs as $t): ?>
       <button type="submit" name="role" value="<?= $t ?>" class="vp-chip <?= $role === $t ? 'active' : '' ?>"><?= $t ?></button>
     <?php endforeach; ?>

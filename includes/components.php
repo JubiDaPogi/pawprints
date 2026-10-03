@@ -26,15 +26,21 @@ function stat_icon($name) {
 function icon_vax()  { return stat_icon('vax'); }
 function icon_clip() { return stat_icon('clip'); }
 
-/** A dashboard stat card. */
-function render_stat($icon, $label, $value, $sub, $tone) {
-    echo '<div class="vp-stat vp-tone-' . $tone . '">'
+/**
+ * A dashboard stat card. Pass $href to make it a link to wherever that
+ * count comes from (e.g. the filtered patient or appointment list);
+ * leave it null for a plain, non-clickable card (reports.php, users.php).
+ */
+function render_stat($icon, $label, $value, $sub, $tone, $href = null) {
+    $tag   = $href !== null ? 'a' : 'div';
+    $attrs = $href !== null ? ' href="' . e($href) . '"' : '';
+    echo "<$tag class=\"vp-stat vp-tone-$tone" . ($href !== null ? ' vp-stat-link' : '') . "\"$attrs>"
        . '<div class="vp-stat-icon">' . stat_icon($icon) . '</div>'
        . '<div class="vp-stat-body">'
        . '<span class="vp-stat-value">' . (int)$value . '</span>'
        . '<span class="vp-stat-label">' . e($label) . '</span>'
        . '<span class="vp-stat-sub">' . e($sub) . '</span>'
-       . '</div></div>';
+       . "</div></$tag>";
 }
 
 /** An empty-state row. */
@@ -87,9 +93,11 @@ function render_pet_card($p, $showOwner = false, $ownerName = null, $latestVisit
     // the supporting line; otherwise (an owner viewing their own pets)
     // the pet stays the headline.
     $headline = ($showOwner && $ownerName !== null) ? $ownerName : $p['name'];
-    $subline  = ($showOwner && $ownerName !== null)
-        ? $p['name'] . ' · ' . $p['breed']
-        : $p['breed'];
+    // Species, then breed (e.g. "Bird · Cockatiel"); either may be blank.
+    $kind    = implode(' · ', array_filter([$p['species'] ?? '', $p['breed'] ?? ''], fn($x) => trim((string)$x) !== ''));
+    $subline = ($showOwner && $ownerName !== null)
+        ? implode(' · ', array_filter([$p['name'], $kind]))
+        : $kind;
 
     echo '<div class="vp-pet-top">'
        . '<div class="vp-pet-avatar">' . species_icon($p['species'], 22) . '</div>'
@@ -153,9 +161,6 @@ function render_patient_modal($modalId, $p, $owners, $speciesOptions = null) {
             <h3><?= $title ?></h3>
             <p>Enter the pet's details. Fields are saved to the clinic database.</p>
           </div>
-          <button type="button" class="vp-modal-x" data-close-modal>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
         </div>
         <form method="post" action="<?= $action ?>">
           <?= csrf_field() ?>
@@ -248,9 +253,6 @@ function render_user_modal($modalId, $u, $owners, $selfId) {
             <h3><?= $title ?></h3>
             <p><?= $isEdit ? 'Update this account. Leave the password blank to keep it unchanged.' : 'The email address is the login and the phone number becomes the temporary password.' ?></p>
           </div>
-          <button type="button" class="vp-modal-x" data-close-modal>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
         </div>
         <form method="post" action="<?= $action ?>">
           <?= csrf_field() ?>

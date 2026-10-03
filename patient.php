@@ -276,7 +276,6 @@ require 'includes/header.php';
     <div class="vp-modal wide">
       <div class="vp-modal-head">
         <div><h3>Log visit &amp; diagnosis</h3><p>Record the reason for visit, diagnosis, and treatment given.</p></div>
-        <button type="button" class="vp-modal-x" data-close-modal><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       </div>
       <form method="post" action="actions/add_visit.php">
         <?= csrf_field() ?>
@@ -310,7 +309,6 @@ require 'includes/header.php';
       <div class="vp-modal wide">
         <div class="vp-modal-head">
           <div><h3>Edit visit &amp; diagnosis</h3><p>Update the reason for visit, diagnosis, and treatment given.</p></div>
-          <button type="button" class="vp-modal-x" data-close-modal><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
         </div>
         <form method="post" action="actions/update_visit.php">
           <?= csrf_field() ?>
@@ -340,7 +338,6 @@ require 'includes/header.php';
     <div class="vp-modal">
       <div class="vp-modal-head">
         <div><h3>Add vaccination</h3><p>Record a vaccine and its next-due date.</p></div>
-        <button type="button" class="vp-modal-x" data-close-modal><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       </div>
       <form method="post" action="actions/add_vaccine.php">
         <?= csrf_field() ?>
@@ -373,7 +370,6 @@ require 'includes/header.php';
       <div class="vp-modal">
         <div class="vp-modal-head">
           <div><h3>Edit vaccination</h3><p>Update this vaccine record and its next-due date.</p></div>
-          <button type="button" class="vp-modal-x" data-close-modal><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
         </div>
         <form method="post" action="actions/update_vaccine.php">
           <?= csrf_field() ?>

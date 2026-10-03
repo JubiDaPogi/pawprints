@@ -9,13 +9,18 @@ $PAGE_TITLE = 'Activity Log';
 
 // Group filter.
 $groups = [
-    'All'      => [],
-    'Sign-ins' => ['login', 'logout', 'login_failed', 'login_denied'],
-    'Records'  => ['patient_create', 'patient_update', 'patient_delete', 'patient_restore',
-                   'visit_create', 'visit_update', 'visit_delete', 'visit_restore',
-                   'vaccine_add', 'vaccine_update', 'vaccine_delete', 'vaccine_restore', 'appt_create', 'appt_complete', 'purge'],
-    'Accounts' => ['user_create', 'user_update', 'user_activate', 'user_deactivate', 'user_delete', 'account_seeded'],
-    'Security' => ['profile_update', 'password_change', 'security_update', 'privacy_consent', 'privacy_withdraw'],
+    'All'          => [],
+    'Sign-ins'     => ['login', 'logout', 'login_failed', 'login_denied'],
+    'Appointments' => ['appt_request', 'appt_approve', 'appt_decline', 'appt_create', 'appt_complete', 'reminders_run'],
+    'Records'      => ['patient_create', 'patient_update', 'patient_delete', 'patient_restore',
+                       'visit_create', 'visit_update', 'visit_delete', 'visit_restore',
+                       'vaccine_add', 'vaccine_update', 'vaccine_delete', 'vaccine_restore',
+                       'species_create', 'species_delete', 'species_restore', 'purge'],
+    'Schedule'     => ['schedule_update'],
+    'Accounts'     => ['user_create', 'user_update', 'user_activate', 'user_deactivate', 'user_delete', 'user_restore',
+                       'permission_grant', 'permission_revoke', 'owner_create', 'account_seeded'],
+    'Security'     => ['profile_update', 'password_change', 'security_update', 'recovery_start', 'recovery_failed',
+                       'privacy_consent', 'privacy_withdraw'],
 ];
 $group = $_GET['group'] ?? 'All';
 if (!isset($groups[$group])) $group = 'All';
@@ -54,7 +59,7 @@ require 'includes/header.php';
   </div>
   <!-- Keeps the active category when the search box submits. -->
   <input type="hidden" name="group" value="<?= e($group) ?>">
-  <div class="vp-filter-chips">
+  <div class="vp-filter-chips" data-label="Category">
     <?php foreach (array_keys($groups) as $g): ?>
       <button type="submit" name="group" value="<?= $g ?>" class="vp-chip <?= $group === $g ? 'active' : '' ?>"><?= $g ?></button>
     <?php endforeach; ?>

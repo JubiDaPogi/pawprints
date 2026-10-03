@@ -38,8 +38,8 @@ if (!$own->fetchColumn()) {
     redirect('../appointments.php');
 }
 
-if (!is_valid_appt_weekday($date) || strtotime($date) < strtotime('today')) {
-    set_flash('Please choose an upcoming day from Monday to Saturday.');
+if (!is_bookable_date($date) || strtotime($date) < strtotime('today')) {
+    set_flash('Please choose an upcoming day the clinic is open.');
     redirect('../appointments.php');
 }
 
@@ -49,13 +49,21 @@ if (!isset($slots[$time])) {
     redirect('../appointments.php');
 }
 
-// The slot must still be free. A Pending request holds it too — it may
-// yet be approved — so only a Declined (or someone else's cancelled)
-// appointment frees a slot back up.
-$taken = $pdo->prepare("SELECT COUNT(*) FROM appointments WHERE appt_date = ? AND appt_time = ? AND status <> 'Declined'");
-$taken->execute([$date, $time]);
-if ((int)$taken->fetchColumn() > 0) {
-    set_flash('That time slot was just taken — please pick another.');
+// A slot that has already started today can't be booked.
+if (slot_has_started($date, $time)) {
+    set_flash('The ' . $slots[$time] . ' slot has already started today — please pick a later time or another day.');
+    redirect('../appointments.php');
+}
+
+// The slot can be turned off for a single date on the Schedule calendar.
+if (!slot_rule_on($date, $time)['open']) {
+    set_flash('The ' . $slots[$time] . ' slot isn\'t available on ' . fmt_date($date) . ' — please pick another time.');
+    redirect('../appointments.php');
+}
+
+// The slot may have a per-day limit set on the Schedule page.
+if (!slot_has_room($date, $time)) {
+    set_flash('The ' . $slots[$time] . ' slot is already full on ' . fmt_date($date) . ' — please pick another time.');
     redirect('../appointments.php');
 }
 

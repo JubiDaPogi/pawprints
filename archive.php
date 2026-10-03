@@ -135,21 +135,20 @@ require 'includes/header.php';
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" name="q" id="archiveSearch" data-search-input value="<?= e($q) ?>" placeholder="Search this tab…" autocomplete="off">
     </div>
+    <div class="vp-filter-chips" data-label="Show">
+      <?php
+        $tabLabels = ['patients' => 'Patients', 'visits' => 'Visits', 'vaccinations' => 'Vaccinations', 'species' => 'Species'];
+        if ($canSeeUsers) $tabLabels['users'] = 'User accounts';
+        foreach ($tabLabels as $k => $label): ?>
+        <!-- Carry the search term across tab switches. -->
+        <a class="vp-chip <?= $tab === $k ? 'active' : '' ?>" href="archive.php?tab=<?= $k ?><?= $q !== '' ? '&q=' . urlencode($q) : '' ?>">
+          <?= $label ?> (<?= $counts[$k] ?>)
+        </a>
+      <?php endforeach; ?>
+    </div>
     <!-- Keeps the current tab when the search box submits. -->
     <input type="hidden" name="tab" value="<?= e($tab) ?>">
   </form>
-
-  <div class="vp-filter-chips" style="padding:0 16px 14px">
-    <?php
-      $tabLabels = ['patients' => 'Patients', 'visits' => 'Visits', 'vaccinations' => 'Vaccinations', 'species' => 'Species'];
-      if ($canSeeUsers) $tabLabels['users'] = 'User accounts';
-      foreach ($tabLabels as $k => $label): ?>
-      <!-- Carry the search term across tab switches. -->
-      <a class="vp-chip <?= $tab === $k ? 'active' : '' ?>" href="archive.php?tab=<?= $k ?><?= $q !== '' ? '&q=' . urlencode($q) : '' ?>">
-        <?= $label ?> (<?= $counts[$k] ?>)
-      </a>
-    <?php endforeach; ?>
-  </div>
 
   <?php /* ---------------- PATIENTS ---------------- */ ?>
   <?php if ($tab === 'patients'): ?>

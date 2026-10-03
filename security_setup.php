@@ -40,7 +40,7 @@ $flashType   = get_flash_type();
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="alternate icon" href="assets/favicon.ico">
 <link rel="apple-touch-icon" href="assets/favicon-180.png">
-<link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/style.css?v=<?= @filemtime(__DIR__ . "/assets/css/style.css") ?>">
 </head>
 <body>
 <div class="vp-setup-page">

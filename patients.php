@@ -10,6 +10,9 @@ $PAGE_TITLE = 'Patient Records';
 // Filters from the query string.
 $q       = trim($_GET['q'] ?? '');
 $species = $_GET['species'] ?? 'All';
+// Not a visible chip (species already uses that slot) — this one exists
+// so the dashboard's "Under treatment" stat card can deep-link here.
+$status  = $_GET['status'] ?? 'All';
 
 // Build the query safely.
 $sql = "SELECT p.*, CONCAT_WS(' ', NULLIF(o.first_name,''), NULLIF(o.middle_name,''), NULLIF(o.last_name,'')) AS owner_name, o.first_name AS owner_first, o.middle_name AS owner_middle, o.last_name AS owner_last,
@@ -26,6 +29,10 @@ if ($q !== '') {
 if ($species !== 'All') {
     $sql .= " AND p.species = ?";
     $params[] = $species;
+}
+if ($status !== 'All') {
+    $sql .= " AND p.status = ?";
+    $params[] = $status;
 }
 $sql .= " ORDER BY o.last_name, o.first_name, o.id, p.name";
 
@@ -92,9 +99,10 @@ require 'includes/header.php';
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
     <input type="text" name="q" id="patientSearch" value="<?= e($q) ?>" placeholder="Search by pet, breed, or owner…" autocomplete="off">
   </div>
-  <!-- Keeps the active species filter when the search box submits. -->
+  <!-- Keeps the active species/status filters when the search box submits. -->
   <input type="hidden" name="species" value="<?= e($species) ?>">
-  <div class="vp-filter-chips">
+  <input type="hidden" name="status" value="<?= e($status) ?>">
+  <div class="vp-filter-chips" data-label="Species">
     <?php foreach ($speciesList as $s): ?>
       <button type="submit" name="species" value="<?= $s ?>" class="vp-chip <?= $species === $s ? 'active' : '' ?>"><?= $s ?></button>
     <?php endforeach; ?>
@@ -108,6 +116,13 @@ require 'includes/header.php';
     New patient
   </button>
 </form>
+
+<?php if ($status !== 'All'): ?>
+  <div class="vp-active-filter">
+    Showing <strong><?= e($status) ?></strong> patients only
+    <a href="patients.php?species=<?= urlencode($species) ?><?= $q !== '' ? '&q=' . urlencode($q) : '' ?>">Clear filter ✕</a>
+  </div>
+<?php endif; ?>
 
 <?php if (!$patients): ?>
   <div class="vp-card"><?= empty_row('paw', 'No patients match your search.') ?></div>
@@ -218,9 +233,6 @@ require 'includes/header.php';
         <h3>Species</h3>
         <p>These are the species you can choose when adding a patient.</p>
       </div>
-      <button type="button" class="vp-modal-x" data-close-modal>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-      </button>
     </div>
     <div class="vp-modal-body">
       <?= form_alert('species') ?>

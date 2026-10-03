@@ -61,6 +61,9 @@ CREATE TABLE users (
     privacy_consent_at   DATETIME     NULL,
     privacy_consent_ver  VARCHAR(20)  NULL,
     last_login           DATETIME NULL,
+    -- When this person last opened the notification bell; activity newer
+    -- than this counts as unread on the badge.
+    notifications_seen_at DATETIME NULL,
     created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -197,8 +200,53 @@ CREATE TABLE appointments (
     reason      VARCHAR(200),
     -- 'Pending' = requested by a pet owner, awaiting staff approval.
     -- 'Declined' = staff turned down a pending request.
-    status      ENUM('Pending','Scheduled','Completed','Declined') DEFAULT 'Scheduled',
+    status          ENUM('Pending','Scheduled','Completed','Declined') DEFAULT 'Scheduled',
+    -- Staff's reason/remarks when declining a request — shown back to the
+    -- owner so they know why, and kept for the clinic's own record.
+    decline_reason  VARCHAR(255) NULL,
     FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ------------------------------------------------------------
+-- APPOINTMENT SCHEDULE  (managed by staff on the Schedule screen)
+-- ------------------------------------------------------------
+-- Bookable hour slots. Appointments store their own time, so editing
+-- or deleting a slot never changes an appointment already booked.
+CREATE TABLE appt_time_slots (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    start_time  TIME NOT NULL UNIQUE,
+    end_time    TIME NOT NULL,
+    -- How many appointments this slot takes per day. NULL = no limit.
+    -- Pending requests count toward it (they hold a place until decided).
+    capacity    INT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Which days of the week take bookings. dow: 1 = Monday ... 7 = Sunday.
+CREATE TABLE appt_weekdays (
+    dow      TINYINT PRIMARY KEY,
+    is_open  TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB;
+
+-- Date-specific exceptions that override the weekly pattern: a holiday
+-- (is_open = 0) or a one-off open day (is_open = 1).
+CREATE TABLE appt_special_dates (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    the_date   DATE NOT NULL UNIQUE,
+    is_open    TINYINT(1) NOT NULL DEFAULT 0,
+    note       VARCHAR(150) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Per-date changes to individual slots, set from the Schedule calendar:
+-- a row turns one slot off for that date, or gives it a different number
+-- of places (capacity NULL = no limit). No row = the slot's usual setting.
+CREATE TABLE appt_day_slots (
+    the_date   DATE NOT NULL,
+    start_time TIME NOT NULL,
+    is_open    TINYINT(1) NOT NULL DEFAULT 1,
+    capacity   INT NULL,
+    PRIMARY KEY (the_date, start_time)
 ) ENGINE=InnoDB;
 
 -- ============================================================
@@ -215,6 +263,13 @@ INSERT INTO owners (id, first_name, middle_name, last_name, phone, email, addres
 -- Species -----------------------------------------------------
 INSERT INTO species (name) VALUES
 ('Dog'), ('Cat'), ('Bird'), ('Rabbit');
+
+-- Default schedule: Mon–Sat, 9 AM–4 PM in hour slots, closed 12–1 PM.
+INSERT INTO appt_time_slots (start_time, end_time) VALUES
+('09:00:00','10:00:00'), ('10:00:00','11:00:00'), ('11:00:00','12:00:00'),
+('13:00:00','14:00:00'), ('14:00:00','15:00:00'), ('15:00:00','16:00:00');
+INSERT INTO appt_weekdays (dow, is_open) VALUES
+(1,1), (2,1), (3,1), (4,1), (5,1), (6,1), (7,0);
 
 -- Patients ----------------------------------------------------
 INSERT INTO patients (id, name, species, breed, sex, color, birth, owner_id, weight, temp, heart, status, allergies) VALUES

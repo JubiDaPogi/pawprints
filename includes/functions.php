@@ -88,31 +88,256 @@ function status_colors($status) {
     }
 }
 
-/**
- * The clinic's fixed appointment grid: one hour-long slot per start time,
- * Monday–Saturday, 9am–4pm with a noon break. Both the staff "Schedule
- * appointment" form and the owner "Request appointment" form book from
- * this same list, so a slot can only ever be held by one appointment.
- */
-function appointment_slots() {
-    return [
-        '09:00:00' => '9:00 – 10:00 AM',
-        '10:00:00' => '10:00 – 11:00 AM',
-        '11:00:00' => '11:00 AM – 12:00 PM',
-        '13:00:00' => '1:00 – 2:00 PM',
-        '14:00:00' => '2:00 – 3:00 PM',
-        '15:00:00' => '3:00 – 4:00 PM',
-    ];
+/* ------------------------------------------------------------
+   Appointment schedule — managed by staff on schedule.php.
+   Three pieces, all in the database:
+     appt_time_slots    the bookable hour slots
+     appt_weekdays      which days of the week are open
+     appt_special_dates date-specific overrides (holiday / one-off open day)
+   Both booking forms (staff "Schedule", owner "Request") and both
+   booking actions read from these, so one edit applies everywhere.
+   A slot can hold any number of appointments — there is deliberately no
+   capacity limit or double-booking check.
+   Every reader falls back to the original Mon–Sat, 9–4 schedule if the
+   tables aren't there yet, so booking never breaks on an old database.
+   ------------------------------------------------------------ */
+
+/** Human label for a slot, e.g. "9:00 – 10:00 AM" or "11:00 AM – 12:00 PM". */
+function slot_label($start, $end) {
+    $s = strtotime($start); $e = strtotime($end);
+    return date('A', $s) === date('A', $e)
+        ? date('g:i', $s) . ' – ' . date('g:i A', $e)
+        : date('g:i A', $s) . ' – ' . date('g:i A', $e);
 }
 
-/** True if $dateStr (Y-m-d) falls on a Monday through Saturday. */
-function is_valid_appt_weekday($dateStr) {
+/** All time-slot rows (id, start_time, end_time, capacity), earliest first.
+ *  capacity is null for "no limit". */
+function appt_slot_rows() {
+    static $rows = null;
+    if ($rows !== null) return $rows;
+    $pdo = $GLOBALS['pdo'];
+    try {
+        $rows = $pdo->query("SELECT id, start_time, end_time, capacity FROM appt_time_slots ORDER BY start_time")->fetchAll();
+    } catch (Throwable $e) {
+        try {   // slots table exists but predates the capacity column
+            $rows = $pdo->query("SELECT id, start_time, end_time, NULL AS capacity FROM appt_time_slots ORDER BY start_time")->fetchAll();
+        } catch (Throwable $e2) {
+            $rows = [];
+            foreach ([['09:00:00','10:00:00'],['10:00:00','11:00:00'],['11:00:00','12:00:00'],
+                      ['13:00:00','14:00:00'],['14:00:00','15:00:00'],['15:00:00','16:00:00']] as $i => [$s, $en]) {
+                $rows[] = ['id' => $i + 1, 'start_time' => $s, 'end_time' => $en, 'capacity' => null];
+            }
+        }
+    }
+    return $rows;
+}
+
+/** A slot's usual per-day capacity: an int, or null for no limit / unknown time. */
+function slot_capacity($time) {
+    foreach (appt_slot_rows() as $r) {
+        if ($r['start_time'] === $time) return $r['capacity'] === null ? null : (int)$r['capacity'];
+    }
+    return null;
+}
+
+/** Per-date slot changes made on the Schedule calendar, for dates in
+ *  [$from, $to] (inclusive, Y-m-d):
+ *  ['Y-m-d' => ['HH:MM:SS' => ['open' => bool, 'cap' => int|null]]]. */
+function appt_day_slot_overrides($from, $to) {
+    $out = [];
+    try {
+        $st = $GLOBALS['pdo']->prepare("SELECT the_date, start_time, is_open, capacity FROM appt_day_slots WHERE the_date BETWEEN ? AND ?");
+        $st->execute([$from, $to]);
+        foreach ($st as $r) {
+            $out[$r['the_date']][$r['start_time']] = [
+                'open' => (bool)$r['is_open'],
+                'cap'  => $r['capacity'] === null ? null : (int)$r['capacity'],
+            ];
+        }
+    } catch (Throwable $e) { /* table not there yet — no per-date changes */ }
+    return $out;
+}
+
+/** How one slot works on one date, with any calendar change applied:
+ *  ['open' => bool, 'cap' => int|null]. */
+function slot_rule_on($date, $time) {
+    $o = appt_day_slot_overrides($date, $date);
+    if (isset($o[$date][$time])) return $o[$date][$time];
+    return ['open' => true, 'cap' => slot_capacity($time)];
+}
+
+/** Appointments holding a place in a slot on a date. Pending requests
+ *  count — they hold the place until staff decide — and so do Completed
+ *  ones; only Declined frees a place. $excludeId leaves one out (used
+ *  when approving a request, which is already counted in this total). */
+function slot_booked_count($date, $time, $excludeId = 0) {
+    $st = $GLOBALS['pdo']->prepare(
+        "SELECT COUNT(*) FROM appointments a JOIN patients p ON p.id = a.patient_id
+         WHERE a.appt_date = ? AND a.appt_time = ? AND a.status <> 'Declined'
+           AND p.deleted_at IS NULL AND a.id <> ?");
+    $st->execute([$date, $time, (int)$excludeId]);
+    return (int)$st->fetchColumn();
+}
+
+/** True once a slot on today's date has started — it can't be booked any more. */
+function slot_has_started($date, $time) {
+    return $date === date('Y-m-d') && $time <= date('H:i:s');
+}
+
+/** True if the slot still has a place on that date (always true when
+ *  no limit). Uses that date's own limit if one was set on the calendar. */
+function slot_has_room($date, $time, $excludeId = 0) {
+    $cap = slot_rule_on($date, $time)['cap'];
+    return $cap === null || slot_booked_count($date, $time, $excludeId) < $cap;
+}
+
+/** Places already taken per upcoming date and slot, for the booking forms:
+ *  ['Y-m-d' => ['HH:MM:SS' => n]]. */
+function upcoming_slot_usage() {
+    $out = [];
+    try {
+        $st = $GLOBALS['pdo']->prepare(
+            "SELECT a.appt_date, a.appt_time, COUNT(*) n FROM appointments a JOIN patients p ON p.id = a.patient_id
+             WHERE a.appt_date >= ? AND a.status <> 'Declined' AND p.deleted_at IS NULL
+             GROUP BY a.appt_date, a.appt_time");
+        $st->execute([date('Y-m-d')]);
+        foreach ($st as $r) $out[$r['appt_date']][$r['appt_time']] = (int)$r['n'];
+    } catch (Throwable $e) { /* no usage info — forms just won't pre-flag full slots */ }
+    return $out;
+}
+
+/** Bookable slots as [start "HH:MM:SS" => label], for the booking dropdowns. */
+function appointment_slots() {
+    $out = [];
+    foreach (appt_slot_rows() as $r) {
+        $out[$r['start_time']] = slot_label($r['start_time'], $r['end_time']);
+    }
+    return $out;
+}
+
+/** Weekly pattern as [1..7 => bool open], 1 = Monday ... 7 = Sunday. */
+function appt_open_weekdays() {
+    static $days = null;
+    if ($days !== null) return $days;
+    $days = [1 => true, 2 => true, 3 => true, 4 => true, 5 => true, 6 => true, 7 => false];
+    try {
+        foreach ($GLOBALS['pdo']->query("SELECT dow, is_open FROM appt_weekdays") as $r) {
+            $days[(int)$r['dow']] = (bool)$r['is_open'];
+        }
+    } catch (Throwable $e) { /* keep the default pattern */ }
+    return $days;
+}
+
+/** Special dates from today on, as ['Y-m-d' => ['open' => bool, 'note' => str]]. */
+function appt_upcoming_special_dates() {
+    static $map = null;
+    if ($map !== null) return $map;
+    $map = [];
+    try {
+        $st = $GLOBALS['pdo']->prepare("SELECT the_date, is_open, note FROM appt_special_dates WHERE the_date >= ? ORDER BY the_date");
+        $st->execute([date('Y-m-d')]);
+        foreach ($st as $r) $map[$r['the_date']] = ['open' => (bool)$r['is_open'], 'note' => (string)$r['note']];
+    } catch (Throwable $e) { /* no overrides */ }
+    return $map;
+}
+
+/** True if bookings are taken on $dateStr (Y-m-d): only days the admin
+ *  opened on the Schedule calendar. Doesn't check past/future — callers do. */
+function is_bookable_date($dateStr) {
     $ts = strtotime((string)$dateStr);
     if ($ts === false) return false;
-    $dow = (int)date('N', $ts); // 1 = Monday ... 7 = Sunday
-    return $dow >= 1 && $dow <= 6;
+    $ymd = date('Y-m-d', $ts);
+    try {
+        $st = $GLOBALS['pdo']->prepare("SELECT is_open FROM appt_special_dates WHERE the_date = ?");
+        $st->execute([$ymd]);
+        $o = $st->fetchColumn();
+        if ($o !== false) return (bool)$o;
+    } catch (Throwable $e) { /* no schedule table — nothing is open */ }
+    // No automatic weekly pattern: a day is bookable only when the admin
+    // has opened it on the Schedule calendar.
+    return false;
 }
 
+/** First bookable date strictly after today (looks ahead up to a year). */
+function next_bookable_date() {
+    for ($i = 1; $i <= 366; $i++) {
+        $d = date('Y-m-d', strtotime("+$i day"));
+        if (is_bookable_date($d)) return $d;
+    }
+    return date('Y-m-d', strtotime('+1 day'));
+}
+
+/** Short description of the open days, e.g. "Mon–Sat" or "Mon, Wed, Fri". */
+function open_days_label() {
+    $names = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 'Sat', 7 => 'Sun'];
+    $open = array_keys(array_filter(appt_open_weekdays()));
+    if (!$open) return 'no regular days';
+    // A single unbroken run of 3+ days reads better as a range.
+    $isRun = ($open[count($open) - 1] - $open[0]) === count($open) - 1;
+    if ($isRun && count($open) >= 3) return $names[$open[0]] . '–' . $names[$open[count($open) - 1]];
+    return implode(', ', array_map(fn($d) => $names[$d], $open));
+}
+
+/** Philippine national holidays for a year, as
+ *  ['Y-m-d' => ['name' => str, 'type' => 'regular'|'special']].
+ *  Fixed dates plus the ones that move (Holy Week from Easter, National
+ *  Heroes Day = last Monday of August). Holidays declared year by year
+ *  (Eid'l Fitr, Eid'l Adha, Chinese New Year, extra special days) can't be
+ *  worked out from the calendar, so they aren't listed — add them as a
+ *  note on the day. */
+function ph_holidays($year) {
+    static $cache = [];
+    $year = (int)$year;
+    if (isset($cache[$year])) return $cache[$year];
+
+    // Easter Sunday (Anonymous Gregorian algorithm).
+    $a = $year % 19; $b = intdiv($year, 100); $c = $year % 100;
+    $d = intdiv($b, 4); $e = $b % 4; $g = intdiv(8 * $b + 13, 25);
+    $h = (19 * $a + $b - $d - $g + 15) % 30;
+    $i = intdiv($c, 4); $k = $c % 4;
+    $l = (32 + 2 * $e + 2 * $i - $h - $k) % 7;
+    $m = intdiv($a + 11 * $h + 19 * $l, 433);
+    $month = intdiv($h + $l - 7 * $m + 90, 25);
+    $day   = ($h + $l - 7 * $m + 33 * $month + 19) % 32;
+    $easter = mktime(0, 0, 0, $month, $day, $year);
+    $off = fn($n) => date('Y-m-d', strtotime(($n >= 0 ? '+' : '') . $n . ' day', $easter));
+
+    $r = 'regular'; $sp = 'special';
+    $list = [
+        "$year-01-01" => ["New Year's Day", $r],
+        "$year-02-25" => ['EDSA People Power Anniversary', $sp],
+        $off(-3)      => ['Maundy Thursday', $r],
+        $off(-2)      => ['Good Friday', $r],
+        $off(-1)      => ['Black Saturday', $sp],
+        "$year-04-09" => ['Araw ng Kagitingan', $r],
+        "$year-05-01" => ['Labor Day', $r],
+        "$year-06-12" => ['Independence Day', $r],
+        "$year-08-21" => ['Ninoy Aquino Day', $sp],
+        date('Y-m-d', strtotime("last monday of august $year")) => ['National Heroes Day', $r],
+        "$year-11-01" => ["All Saints' Day", $sp],
+        "$year-11-02" => ["All Souls' Day", $sp],
+        "$year-11-30" => ['Bonifacio Day', $r],
+        "$year-12-08" => ['Feast of the Immaculate Conception', $sp],
+        "$year-12-24" => ['Christmas Eve', $sp],
+        "$year-12-25" => ['Christmas Day', $r],
+        "$year-12-30" => ['Rizal Day', $r],
+        "$year-12-31" => ["New Year's Eve", $sp],
+    ];
+    $out = [];
+    foreach ($list as $date => [$name, $type]) $out[$date] = ['name' => $name, 'type' => $type];
+    ksort($out);
+    return $cache[$year] = $out;
+}
+
+/** Wording for a holiday's type, e.g. "regular holiday". */
+function ph_holiday_type_label($type) {
+    return $type === 'regular' ? 'regular holiday' : 'special non-working day';
+}
+
+/** The Philippine holiday on a date (Y-m-d), or null. */
+function ph_holiday_on($date) {
+    return ph_holidays((int)substr($date, 0, 4))[$date] ?? null;
+}
 /** Render a status pill. */
 function status_pill($status, $large = false) {
     [$bg, $fg] = status_colors($status);
@@ -201,8 +426,38 @@ function form_alert($formKey) {
 
 /** Redirect helper. */
 function redirect($path) {
-    header("Location: $path");
+    header('Location: ' . return_to_target($path));
     exit;
+}
+
+/**
+ * Every POST form on an app page carries a hidden `return_to` (added by
+ * footer.php) holding the page it was submitted from, including its query
+ * string and #tab — e.g. "appointments.php?status=Pending". When an action
+ * redirects back to that SAME page, use the submitted copy instead so the
+ * person lands on the filter/tab they were on, not the page's default.
+ *
+ * Only same-page redirects are rewritten: an action that deliberately goes
+ * somewhere else (deleting a patient from its chart → the patient list)
+ * keeps its own destination. If the action's own target names a #fragment
+ * (e.g. "#vacc" after editing a vaccine), that fragment wins.
+ */
+function return_to_target($path) {
+    $rt = $_POST['return_to'] ?? '';
+    // Local page names only — no slashes, schemes or hosts, so this can
+    // never be turned into an open redirect.
+    if (!is_string($rt) || !preg_match('~^([A-Za-z0-9_-]+\.php)(\?[^#\s]*)?(#[A-Za-z0-9_-]*)?$~', $rt, $rm)) {
+        return $path;
+    }
+    $prefix = strncmp($path, '../', 3) === 0 ? '../' : '';
+    if (!preg_match('~^([A-Za-z0-9_-]+\.php)(\?[^#]*)?(#.*)?$~', substr($path, strlen($prefix)), $pm)) {
+        return $path;
+    }
+    if ($pm[1] !== $rm[1]) return $path;
+
+    $query    = $rm[2] ?? '';
+    $fragment = (isset($pm[3]) && $pm[3] !== '') ? $pm[3] : ($rm[3] ?? '');
+    return $prefix . $rm[1] . $query . $fragment;
 }
 
 /* ------------------------------------------------------------
@@ -658,6 +913,7 @@ function audit_action_meta($action) {
         'appt_approve'     => ['Appointment approved', 'teal'],
         'appt_decline'     => ['Appointment declined', 'rose'],
         'appt_complete'    => ['Appointment done',    'teal'],
+        'schedule_update'  => ['Schedule changed',    'amber'],
         'user_restore'     => ['Account restored',    'teal'],
         'species_restore'  => ['Species restored',    'teal'],
         'purge'            => ['Permanently deleted', 'rose'],

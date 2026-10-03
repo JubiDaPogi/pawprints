@@ -82,10 +82,10 @@ require 'includes/header.php';
 
   <div class="vp-stat-row">
     <?php
-      render_stat('paw',    'Total patients',  $totalPatients,  'Active records',   'teal');
-      render_stat('pulse',  'Under treatment', $underTreatment, 'Needs monitoring', 'amber');
-      render_stat('cal',    'Upcoming visits', $scheduledCount, 'Scheduled ahead',  'pine');
-      render_stat('vax',    'Vaccines due',    count($vaccDue),  'Within 90 days',   'rose');
+      render_stat('paw',    'Total patients',  $totalPatients,  'Active records',   'teal',  'patients.php');
+      render_stat('pulse',  'Under treatment', $underTreatment, 'Needs monitoring', 'amber', 'patients.php?status=Under+Treatment');
+      render_stat('cal',    'Upcoming visits', $scheduledCount, 'Scheduled ahead',  'pine',  'appointments.php?status=Scheduled');
+      render_stat('vax',    'Vaccines due',    count($vaccDue),  'Within 90 days',   'rose',  '#vaccines-due');
     ?>
   </div>
 
@@ -107,7 +107,7 @@ require 'includes/header.php';
     </div>
 
     <!-- Vaccines due -->
-    <div class="vp-card">
+    <div class="vp-card" id="vaccines-due">
       <div class="vp-card-head"><h3><?= icon_vax() ?> Vaccinations coming due</h3></div>
       <div class="vp-appt-mini">
         <?php if (!$vaccDue): ?>
@@ -199,9 +199,6 @@ require 'includes/header.php';
     <div class="vp-modal wide">
       <div class="vp-modal-head">
         <div><h3>Add a pet</h3><p>Tell us about your pet — the clinic will fill in the rest at your first visit.</p></div>
-        <button type="button" class="vp-modal-x" data-close-modal>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
       </div>
       <form method="post" action="actions/create_pet.php">
         <?= csrf_field() ?>

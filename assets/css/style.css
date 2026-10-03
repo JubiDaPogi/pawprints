@@ -292,6 +292,9 @@
     .vp-stat-value { font-family:'Fraunces',serif; font-size:30px; font-weight:600; line-height:1; letter-spacing:-.02em; }
     .vp-stat-label { font-size:13.5px; font-weight:600; color:var(--ink); margin-top:6px; }
     .vp-stat-sub { font-size:12px; color:var(--ink-3); margin-top:2px; }
+    .vp-stat-link { text-decoration:none; color:inherit; cursor:pointer; transition:box-shadow .16s, transform .16s, border-color .16s; }
+    .vp-stat-link:hover { box-shadow:var(--shadow-md); transform:translateY(-2px); border-color:var(--line); }
+    .vp-stat-link:focus-visible { outline:2px solid var(--teal); outline-offset:2px; }
 
     /* ---------- CARDS ---------- */
     .vp-card { background:var(--card); border-radius:var(--r); box-shadow:var(--shadow-sm); border:1px solid var(--line-2); overflow:hidden; }
@@ -483,6 +486,8 @@
     .vp-appt-breed { min-width:0; flex-shrink:1; font-size:12.5px; color:var(--ink-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .vp-appt-reason { font-size:14px; color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .vp-appt-time { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink-3); }
+    .vp-appt-declined-note { display:flex; align-items:flex-start; gap:6px; margin-top:4px; font-size:12.5px; color:var(--rose); }
+    .vp-appt-declined-note svg { flex-shrink:0; margin-top:1px; }
     .vp-appt-full-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }
 
     /* ---------- REPORTS ---------- */
@@ -541,8 +546,6 @@
     .vp-modal-head { display:flex; align-items:flex-start; justify-content:space-between; padding:22px 24px 18px; border-bottom:1px solid var(--line-2); flex-shrink:0; }
     .vp-modal-head h3 { font-family:'Fraunces',serif; font-size:21px; font-weight:600; }
     .vp-modal-head p { font-size:13.5px; color:var(--ink-3); margin:5px 0 0; }
-    .vp-modal-x { width:34px; height:34px; border-radius:10px; display:grid; place-items:center; color:var(--ink-3); transition:.14s; flex-shrink:0; }
-    .vp-modal-x:hover { background:var(--paper); color:var(--ink); }
     .vp-modal-body { padding:22px 24px 24px; overflow-y:auto; min-height:0; }
 
     /* ---------- FORMS ---------- */
@@ -801,6 +804,12 @@
 .vp-field-wide { grid-column:1 / -1; }
 .vp-field-note { color:var(--ink-3); font-size:12px; margin-top:5px; display:block; }
 .vp-hint-text { color:var(--ink-3); font-size:12.5px; margin:2px 0 0; }
+.vp-active-filter {
+  display:flex; align-items:center; gap:10px; padding:10px 14px; margin-bottom:14px;
+  background:var(--teal-soft); color:var(--pine); border-radius:var(--r-sm); font-size:13.5px;
+}
+.vp-active-filter a { margin-left:auto; color:var(--pine); font-weight:600; text-decoration:none; white-space:nowrap; }
+.vp-active-filter a:hover { text-decoration:underline; }
 .vp-acct-form { padding:20px; }
 .vp-acct-form .vp-form-actions { margin-top:18px; }
 
@@ -1145,6 +1154,24 @@ button.vp-top-bell[aria-expanded="true"] {
 .vp-bell-item.tone-overdue .vp-bell-ico { background: var(--warn-bg); color: var(--warn-fg); }
 .vp-bell-item.tone-care    .vp-bell-ico { background: var(--warn-bg); color: var(--amber); }
 .vp-bell-item.tone-pending .vp-bell-ico { background: var(--rose-soft); color: var(--rose); }
+/* Recent-activity rows take their tone from the action's activity-log
+   colour (audit_action_meta). */
+.vp-bell-item.act-teal  .vp-bell-ico { background: var(--teal-soft);  color: var(--teal); }
+.vp-bell-item.act-amber .vp-bell-ico { background: var(--amber-soft); color: var(--amber); }
+.vp-bell-item.act-rose  .vp-bell-ico { background: var(--rose-soft);  color: var(--rose); }
+.vp-bell-item.act-muted .vp-bell-ico { background: var(--muted-bg);   color: var(--muted-fg); }
+/* New since you last opened the bell. */
+.vp-bell-item.unread { background: var(--teal-soft); }
+.vp-bell-item.unread:hover { background: var(--paper); }
+.vp-bell-item.unread .vp-bell-title::after {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--teal); margin-left: auto; align-self: center;
+}
+.vp-bell-section {
+  padding: 8px 14px 6px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-3); background: var(--paper); border-bottom: 1px solid var(--line);
+}
 .vp-bell-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .vp-bell-title {
   display: flex;
@@ -1522,6 +1549,14 @@ button.vp-top-bell[aria-expanded="true"] {
   background: var(--warn-bg);
   color: var(--rose);
 }
+.vp-confirm-icon.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.vp-confirm-icon.decline { background: var(--rose-soft); color: var(--rose); }
+/* Centered header (icon over title), matching the confirm dialog — used
+   by the Decline modal. */
+.vp-modal-head.vp-modal-head-center { justify-content: center; text-align: center; }
+/* The confirm dialog is rendered after .vp-root (where the app font is
+   set), so it was falling back to the browser's default serif font. */
+.vp-confirm-overlay { font-family: 'Outfit', system-ui, sans-serif; }
 .vp-confirm-box h3 {
   margin: 0 0 7px;
   font-family: 'Fraunces', Georgia, serif;
@@ -1557,7 +1592,7 @@ button.vp-top-bell[aria-expanded="true"] {
 }
 .vp-bin-actions form { margin: 0; }
 /* Search sits between the archive card head and the tab chips. */
-.vp-archive-search { padding: 14px 16px 4px; }
+.vp-archive-search { padding: 14px 16px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .vp-btn-small.danger {
   background: transparent;
   color: var(--rose);
@@ -2170,3 +2205,387 @@ button.vp-top-bell[aria-expanded="true"] {
   .vp-mr-confidential { margin-bottom: 0 !important; padding-bottom: 0 !important; }
   .vp-mr-confidential { padding-top: 8px !important; }
 }
+
+/* ------------------------------------------------------------------
+   Appointment schedule (schedule.php)
+------------------------------------------------------------------ */
+.vp-sched-intro { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+.vp-sched-list { padding: 6px 8px; }
+.vp-sched-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 12px; border-radius: 10px; flex-wrap: wrap;
+}
+.vp-sched-row + .vp-sched-row { border-top: 1px solid var(--line-2); }
+.vp-sched-row.is-past { opacity: .55; }
+.vp-sched-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vp-sched-main strong { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 14px; color: var(--ink); }
+.vp-sched-main span { font-size: 12.5px; color: var(--ink-3); }
+.vp-sched-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.vp-sched-actions svg { width: 13px; height: 13px; }
+.vp-sched-del:hover { color: var(--rose); border-color: var(--rose); }
+.vp-sched-tag {
+  padding: 1px 8px; border-radius: 99px; font-size: 11px; font-weight: 700;
+  background: var(--muted-bg); color: var(--muted-fg);
+}
+.vp-sched-tag.open   { background: var(--ok-bg);     color: var(--ok-fg); }
+.vp-sched-tag.closed { background: var(--rose-soft); color: var(--rose); }
+.vp-sched-tag.cap    { background: var(--teal-soft); color: var(--teal); }
+.vp-sched-warn { font-style: normal; color: var(--warn-fg); font-weight: 600; }
+.vp-sched-days { padding: 18px 20px 20px; }
+.vp-day-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.vp-day-chip { position: relative; cursor: pointer; }
+.vp-day-chip input { position: absolute; opacity: 0; width: 0; height: 0; }
+.vp-day-chip span {
+  display: inline-block; min-width: 54px; padding: 9px 12px; text-align: center;
+  border: 1.5px solid var(--line); border-radius: 10px; background: var(--card);
+  font-size: 13.5px; font-weight: 600; color: var(--ink-3); transition: .14s;
+}
+.vp-day-chip input:checked + span { background: var(--pine); border-color: var(--pine); color: #fff; }
+.vp-day-chip input:focus-visible + span { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+/* ------------------------------------------------------------------
+   Booking calendar (appointments.php) — replaces the native date
+   picker so each day can show its availability.
+------------------------------------------------------------------ */
+.vp-cal-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; padding: 11px 13px; border: 1.5px solid var(--line); border-radius: 10px;
+  background: var(--paper-2); color: var(--ink); font: inherit; font-size: 14px;
+  text-align: left; cursor: pointer; transition: .15s;
+}
+.vp-cal-trigger svg { color: var(--ink-3); flex-shrink: 0; }
+.vp-cal-trigger:hover { border-color: var(--teal); }
+.vp-cal-trigger:focus-visible, .vp-cal-trigger[aria-expanded="true"] {
+  outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); background: var(--card);
+}
+.vp-cal-trigger.is-invalid { border-color: var(--rose); }
+.vp-cal[hidden] { display: none; }
+.vp-cal {
+  border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; background: var(--card);
+  animation: vpPop .18s cubic-bezier(.16,1,.3,1);
+}
+.vp-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.vp-cal-head strong { font-family: 'Fraunces', serif; font-size: 16px; font-weight: 600; color: var(--ink); }
+.vp-cal-nav {
+  width: 32px; height: 32px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--card);
+  color: var(--ink-2); font-size: 20px; line-height: 1; cursor: pointer; transition: .14s;
+}
+.vp-cal-nav:hover:not(:disabled) { border-color: var(--teal); color: var(--teal); }
+.vp-cal-nav:disabled { opacity: .35; cursor: default; }
+.vp-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.vp-cal-dow { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; padding-bottom: 2px; }
+.vp-cal-day {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  min-height: 48px; padding: 4px 2px; border-radius: 9px; border: 1.5px solid transparent;
+  font: inherit; cursor: pointer; transition: transform .12s, box-shadow .12s;
+}
+.vp-cal-num { font-size: 14px; font-weight: 700; line-height: 1.1; }
+.vp-cal-left { font-size: 10px; font-weight: 600; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.vp-cal-day.is-open   { background: #e3f4e9; color: #1d6b43; border-color: #bfe3cd; }
+.vp-cal-day.is-open:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(29,107,67,.18); }
+.vp-cal-day.is-full   { background: #fbe4e4; color: #b42828; border-color: #f2c3c3; cursor: not-allowed; }
+.vp-cal-day.is-closed,
+.vp-cal-day.is-past   { background: transparent; color: var(--ink-3); opacity: .5; cursor: not-allowed; }
+.vp-cal-day.is-closed .vp-cal-num { text-decoration: line-through; text-decoration-thickness: 1px; }
+.vp-cal-day.is-today  { box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+.vp-cal-day.is-selected { background: #1f8a4c; border-color: #1f8a4c; color: #fff; box-shadow: 0 3px 10px rgba(31,138,76,.35); }
+.vp-cal-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 12px; color: var(--ink-2); }
+.vp-cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.vp-cal-legend i { width: 12px; height: 12px; border-radius: 4px; border: 1.5px solid; }
+.vp-cal-legend i.is-open   { background: #e3f4e9; border-color: #bfe3cd; }
+.vp-cal-legend i.is-full   { background: #fbe4e4; border-color: #f2c3c3; }
+.vp-cal-legend i.is-closed { background: transparent; border-color: var(--line); }
+@media (max-width: 480px) {
+  .vp-cal { padding: 10px 8px; }
+  .vp-cal-grid { gap: 3px; }
+  .vp-cal-day { min-height: 44px; }
+  .vp-cal-left { font-size: 9px; }
+}
+
+/* ------------------------------------------------------------------
+   Schedule page — month calendar and day editor
+------------------------------------------------------------------ */
+.vp-scal { margin-bottom: 20px; }
+.vp-scal-top { flex-wrap: wrap; gap: 10px; }
+.vp-scal-nav { display: flex; align-items: center; gap: 10px; }
+.vp-scal-nav strong { font-family: 'Fraunces', serif; font-size: 17px; font-weight: 600; min-width: 140px; text-align: center; }
+a.vp-cal-nav { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.vp-scal-hint { padding: 0 20px; margin: 4px 0 12px; }
+.vp-scal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 0 20px; }
+.vp-scal-day {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  min-height: 78px; padding: 8px 9px; border-radius: 11px; border: 1.5px solid transparent;
+  font: inherit; text-align: left; cursor: pointer; transition: transform .12s, box-shadow .12s;
+}
+.vp-scal-day:not(:disabled):hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.vp-scal-num  { font-size: 15px; font-weight: 700; line-height: 1.1; }
+.vp-scal-sub  { font-size: 11.5px; font-weight: 600; }
+.vp-scal-booked { font-size: 11px; color: var(--ink-2); margin-top: auto; }
+.vp-scal-day.is-open   { background: #e3f4e9; color: #1d6b43; border-color: #bfe3cd; }
+.vp-scal-day.is-full   { background: #fbe4e4; color: #b42828; border-color: #f2c3c3; }
+.vp-scal-day.is-closed { background: var(--paper); color: var(--ink-3); border-color: var(--line-2); }
+.vp-scal-day.is-past   { background: transparent; color: var(--ink-3); opacity: .45; cursor: default; }
+.vp-scal-day.is-today  { box-shadow: inset 0 0 0 2px var(--ink-3); }
+.vp-scal-day.is-custom::after, .vp-scal-dot {
+  content: ''; position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--amber); box-shadow: 0 0 0 2px var(--card);
+}
+.vp-scal-dot { position: static; display: inline-block; box-shadow: none; }
+.vp-scal-legend { padding: 0 20px 18px; }
+.vp-scal-legend i.is-closed { background: var(--paper); border-color: var(--line-2); }
+
+.vp-scal-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.vp-scal-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.vp-scal-toggle span {
+  display: block; padding: 11px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--paper-2);
+  text-align: center; font-size: 13.5px; font-weight: 600; color: var(--ink-2); cursor: pointer; transition: .14s;
+}
+.vp-scal-toggle input[value="1"]:checked + span { background: #e3f4e9; border-color: #1f8a4c; color: #1d6b43; }
+.vp-scal-toggle input[value="0"]:checked + span { background: #fbe4e4; border-color: #c43a3a; color: #b42828; }
+.vp-scal-toggle input:focus-visible + span { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+.vp-scal-slots { display: flex; flex-direction: column; border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; }
+.vp-scal-slot { display: grid; grid-template-columns: 1fr auto 96px auto; grid-template-areas: "on used cap act"; align-items: center; column-gap: 12px; padding: 9px 12px; }
+.vp-scal-slot + .vp-scal-slot { border-top: 1px solid var(--line-2); }
+.vp-scal-slot-on { grid-area: on; display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; margin: 0 !important; }
+.vp-scal-slot-on input { width: 17px !important; height: 17px; accent-color: #1f8a4c; padding: 0 !important; }
+.vp-scal-slot-used { grid-area: used; font-size: 12px; color: var(--ink-3); }
+.vp-field .vp-scal-slot input[type="number"] { grid-area: cap; padding: 7px 9px; font-size: 13.5px; }
+.vp-scal-slot:has(input[type="checkbox"]:not(:checked)) .vp-scal-slot-on span { color: var(--ink-3); text-decoration: line-through; }
+.vp-scal-slot:has(input[type="checkbox"]:not(:checked)) input[type="number"] { opacity: .45; }
+#daySlotsField.is-off { opacity: .45; pointer-events: none; }
+.vp-scal-warn { margin: 14px 0 0; font-size: 13px; }
+.vp-scal-warn[hidden] { display: none; }
+.vp-scal-reset[hidden] { display: none; }
+.vp-scal-reset { margin-right: auto; color: var(--rose); }
+
+@media (max-width: 640px) {
+  .vp-scal-hint { padding: 0 14px; }
+  .vp-scal-grid { gap: 3px; padding: 0 10px; }
+  .vp-scal-legend { padding: 0 14px 16px; }
+  .vp-scal-day { min-height: 54px; padding: 5px 4px; align-items: center; text-align: center; border-radius: 8px; }
+  .vp-scal-num { font-size: 13px; }
+  .vp-scal-sub { font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .vp-scal-booked { display: none; }
+  .vp-scal-day.is-custom::after { top: 4px; right: 4px; width: 6px; height: 6px; }
+  .vp-scal-slot { grid-template-columns: 1fr 84px auto; grid-template-areas: "on cap act" "used used act"; row-gap: 2px; }
+}
+.vp-field .vp-scal-toggle label { margin: 0; font-size: inherit; }
+.vp-field .vp-scal-toggle input { width: auto; }
+
+/* Schedule calendar: click a day to flip it, pencil to edit. Open = green,
+   closed = red; "open but full" is amber so it can't be mistaken for closed. */
+.vp-scal-cell { position: relative; display: flex; min-width: 0; }
+.vp-scal-cell .vp-scal-day { flex: 1; width: 100%; min-width: 0; }
+.vp-scal-day.is-closed { background: #fbe4e4; color: #b42828; border-color: #f2c3c3; }
+.vp-scal-day.is-full   { background: var(--amber-soft); color: #9a5a0b; border-color: #f1d3a3; }
+.vp-scal-day.is-past   { background: transparent; color: var(--ink-3); border-color: transparent; }
+.vp-scal-day:disabled:not(.is-past) { opacity: .6; cursor: wait; }
+.vp-scal-day.is-closed:not(:disabled):hover { box-shadow: 0 3px 8px rgba(180,40,40,.18); }
+.vp-scal-day.is-custom::after { top: auto; bottom: 8px; right: 8px; }
+.vp-scal-edit {
+  position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 8px;
+  display: grid; place-items: center; background: var(--card); color: var(--ink-2);
+  border: 1px solid var(--line); opacity: 0; transition: .14s; cursor: pointer; z-index: 1;
+}
+.vp-scal-edit svg { width: 14px; height: 14px; }
+.vp-scal-cell:hover .vp-scal-edit, .vp-scal-edit:focus-visible { opacity: 1; }
+.vp-scal-edit:hover { background: var(--teal-soft); color: var(--pine); border-color: var(--teal); }
+.vp-scal-legend i.is-full   { background: var(--amber-soft); border-color: #f1d3a3; }
+.vp-scal-legend i.is-closed { background: #fbe4e4; border-color: #f2c3c3; }
+@media (hover: none), (max-width: 640px) {
+  .vp-scal-edit { opacity: 1; width: 22px; height: 22px; top: 3px; right: 3px; border-radius: 6px; }
+  .vp-scal-edit svg { width: 11px; height: 11px; }
+  .vp-scal-day.is-custom::after { bottom: 4px; right: 4px; top: auto; }
+}
+
+/* Time-slot management lives inside the day editor now; its Add/Edit
+   dialogs open on top of it (the confirm dialog is above both). */
+[id^="modal-slot-"].vp-modal-overlay { z-index: 110; }
+.vp-scal-slots-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.vp-scal-slots-head label { margin: 0; }
+.vp-scal-slots-head .vp-btn-tiny svg { width: 13px; height: 13px; }
+.vp-scal-slot-act { grid-area: act; display: flex; gap: 5px; }
+.vp-scal-slot-btn {
+  width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; cursor: pointer;
+  background: var(--paper); color: var(--ink-2); border: 1px solid var(--line); transition: .14s;
+}
+.vp-scal-slot-btn svg { width: 14px; height: 14px; }
+.vp-scal-slot-btn:hover { background: var(--teal-soft); color: var(--pine); border-color: var(--teal); }
+.vp-scal-slot-btn.del:hover { background: var(--rose-soft); color: var(--rose); border-color: var(--rose); }
+
+/* Slot tick boxes in the day editor: a drawn check icon instead of the
+   browser's native checkbox. */
+.vp-scal-slot-on input[type="checkbox"] {
+  position: absolute; opacity: 0; width: 1px !important; height: 1px !important; pointer-events: none;
+}
+.vp-scal-slot-on { position: relative; }
+.vp-scal-check {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center;
+  border: 1.5px solid var(--line); background: var(--card); color: transparent; transition: .14s;
+}
+.vp-scal-check svg { width: 14px; height: 14px; }
+.vp-scal-slot-on:hover .vp-scal-check { border-color: #1f8a4c; }
+.vp-scal-slot-on input:checked + .vp-scal-check { background: #1f8a4c; border-color: #1f8a4c; color: #fff; }
+.vp-scal-slot-on input:focus-visible + .vp-scal-check { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+/* Philippine holidays on the calendars */
+.vp-scal-flag { width: 12px; height: 12px; margin-left: 5px; vertical-align: -1px; color: var(--teal); flex-shrink: 0; }
+.vp-scal-hol { font-size: 10.5px; font-weight: 600; line-height: 1.2; color: var(--teal); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vp-scal-day.is-holiday .vp-scal-num { display: inline-flex; align-items: center; }
+.vp-scal-legend .vp-scal-flag { margin: 0 4px 0 0; vertical-align: -2px; }
+.vp-scal-holnote { display: block; margin-top: 6px; font-size: 12.5px; font-weight: 600; color: var(--teal); }
+.vp-scal-holnote[hidden] { display: none; }
+.vp-cal-day { position: relative; }
+.vp-cal-hol { display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); }
+.vp-cal-legend i.is-hol { background: var(--teal); border-color: var(--teal); border-radius: 50%; width: 9px; height: 9px; }
+@media (max-width: 640px) { .vp-scal-hol { display: none; } }
+
+/* Holiday names on the booking calendar */
+.vp-cal-day { min-height: 54px; }
+.vp-cal-holname { font-size: 9px; font-weight: 600; line-height: 1.15; color: var(--teal); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vp-cal-day.is-selected .vp-cal-holname { color: #fff; }
+.vp-cal-hols { list-style: none; margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--teal-soft); display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--ink-2); }
+.vp-cal-hols b { display: inline-block; min-width: 46px; color: var(--teal); font-weight: 700; }
+@media (max-width: 560px) { .vp-cal-holname { display: none; } .vp-cal-day { min-height: 44px; } }
+.vp-scal-hols { margin: 14px 20px 0; }
+@media (max-width: 640px) { .vp-scal-hols { margin: 12px 10px 0; } }
+
+/* Day notes on the calendars */
+.vp-scal-note { font-size: 10.5px; font-weight: 500; line-height: 1.2; color: var(--ink-2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
+@media (max-width: 640px) { .vp-scal-note { display: none; } }
+
+/* Notes: their own icon and colour (violet) — separate from the orange
+   "slot changes" circle and the teal holiday flag */
+:root { --note: #7a4fc4; --note-soft: #efe8fa; }
+.vp-scal-note { color: var(--note); font-weight: 600; }
+.vp-note-ico { width: 13px; height: 13px; color: var(--note); flex-shrink: 0; vertical-align: -2px; }
+.vp-scal-num .vp-note-ico { margin-left: 5px; }
+.vp-scal-legend .vp-note-ico, .vp-cal-legend .vp-note-ico { margin-right: 5px; }
+.vp-cal-marks { display: contents; }   /* holiday dot: top-right corner; note icon: bottom-right corner */
+.vp-cal-marks .vp-cal-hol { position: absolute; top: 4px; right: 4px; margin: 0; }
+.vp-cal-noteico { position: absolute; right: 4px; bottom: 4px; line-height: 0; }
+.vp-cal-noteico .vp-note-ico { width: 11px; height: 11px; }
+.vp-cal-day.is-selected .vp-note-ico { color: #fff; }
+.vp-cal-hols li b { color: var(--ink); }                    /* date: black */
+.vp-cal-hols li .hol  { color: var(--teal); font-weight: 600; }   /* holiday title: blue */
+.vp-cal-hols li .note { color: var(--note); font-weight: 600; }   /* note: violet */
+
+/* Holiday list: date | holiday title, with the note on the line below the title */
+.vp-cal-hols li { display: grid; grid-template-columns: 62px 1fr; column-gap: 10px; align-items: baseline; }
+.vp-cal-hols li b { grid-column: 1; grid-row: 1; min-width: 0; }
+.vp-cal-hols li .hol, .vp-cal-hols li .note { grid-column: 2; }
+.vp-cal-hols li .hol { grid-row: 1; }
+
+/* Time picker on the booking forms: coloured status after each slot */
+.vp-tp .vp-ss-label { display: flex; align-items: center; gap: 8px; }
+.vp-tp-opt { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; width: 100%; border: 0; background: none; font: inherit; text-align: left; }
+.vp-tp-opt:disabled { cursor: not-allowed; }
+.vp-tp-opt:disabled .vp-tp-time { color: var(--ink-3); }
+.vp-tp-opt:not(:disabled):hover { background: var(--paper); }
+.vp-tp-opt.selected { background: var(--teal-soft); }
+.vp-tp-time { font-weight: 600; white-space: nowrap; }
+.vp-tp-st { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+.vp-tp-st.ok   { color: #1d6b43; background: #e3f4e9; }
+.vp-tp-st.full { color: #b42828; background: #fbe4e4; }
+.vp-tp-st.off  { color: var(--ink-3); background: var(--muted-bg); }
+.vp-tp .vp-ss-list { max-height: 260px; }
+
+/* Time picker polish: the list may be wider than the (half-width) field —
+   it grows leftward over the Day field so nothing scrolls sideways. */
+.vp-tp .vp-ss-panel { left: auto; right: 0; min-width: 100%; width: max-content; max-width: min(340px, calc(100vw - 48px)); }
+.vp-tp .vp-ss-list { overflow-x: hidden; padding: 6px; }
+.vp-tp-opt { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; padding: 9px 10px; font-size: 13.5px; color: var(--ink); border-radius: 8px; }
+.vp-tp-opt + .vp-tp-opt { margin-top: 2px; }
+.vp-tp-time { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.vp-tp-st { font-size: 11px; padding: 3px 9px; line-height: 1.2; justify-self: end; }
+.vp-tp-opt:disabled, .vp-tp-opt:disabled:hover { background: none; }
+.vp-tp-opt:disabled .vp-tp-time { color: var(--ink-3); font-weight: 500; }
+.vp-tp-opt.selected, .vp-tp-opt.selected:hover { background: var(--teal-soft); }
+.vp-tp-opt.selected .vp-tp-time { color: var(--teal); }
+.vp-tp .vp-ss-label { min-width: 0; }
+.vp-tp .vp-ss-label .vp-tp-time { font-weight: 500; }
+@media (max-width: 560px) { .vp-tp .vp-ss-panel { left: 0; right: 0; width: auto; max-width: none; } }
+
+/* Time picker: keep the list exactly under the field (it never widens or
+   shifts the form); a status that doesn't fit drops under its time. */
+.vp-tp .vp-ss-panel, .vp-tp.vp-ss-up .vp-ss-panel { left: 0; right: 0; width: auto; min-width: 0; max-width: none; }
+.vp-tp-opt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 3px 8px; }
+.vp-tp-time { min-width: 0; white-space: nowrap; overflow: visible; }
+.vp-tp-st { margin-left: auto; }
+.vp-tp .vp-ss-trigger { min-width: 0; }
+.vp-tp .vp-ss-label { overflow: hidden; }
+.vp-tp .vp-ss-label .vp-tp-st { flex-shrink: 0; }
+/* Form columns keep their size whatever is inside (a long time + status
+   in the picker used to stretch the Time column and nudge the Day field). */
+.vp-form-grid > .vp-field { min-width: 0; }
+
+/* Time picker — final layout. One line per slot: time on the left, status
+   on the right; the time shortens with "…" rather than pushing the status
+   down. The list is placed by script (position: fixed) right under the
+   field, so the modal can't clip it and the field never moves. */
+.vp-tp .vp-ss-panel { position: fixed; z-index: 400; left: auto; right: auto; top: auto; bottom: auto; width: auto; min-width: 0; max-width: none; }
+.vp-tp-opt {
+  display: grid !important; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  column-gap: 10px; padding: 9px 11px; font-size: 13.5px !important; line-height: 1.3;
+}
+.vp-tp-time { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp-tp-st { margin-left: 0; font-size: 11px; }
+.vp-tp .vp-ss-list { max-height: 264px; overflow-y: auto; overflow-x: hidden; }
+
+/* Day/Time row: the Time column gets more room so a full time plus its
+   status fits without being cut off. */
+.vp-form-grid:has(.vp-tp) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); }
+.vp-tp-time { overflow: visible; text-overflow: clip; }
+.vp-tp-opt { grid-template-columns: auto auto !important; justify-content: space-between; }
+.vp-tp .vp-ss-label { gap: 8px; justify-content: space-between; }
+.vp-tp .vp-ss-label .vp-tp-time { overflow: visible; }
+@media (max-width: 560px) { .vp-form-grid:has(.vp-tp) { grid-template-columns: 1fr; } }
+
+/* Filter chips shown as a dropdown (see the script at the end of footer.php) */
+.vp-chips-hidden { display: none !important; }
+.vp-filter-dd { width: auto; min-width: 190px; flex: 0 0 auto; }
+.vp-filter-dd .vp-ss-trigger { background: var(--card); font-weight: 600; color: var(--ink-2); padding: 10px 13px; }
+.vp-filter-dd .vp-ss-trigger:hover { border-color: var(--ink-3); }
+.vp-fdd-label { font-size: 12px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+.vp-filter-dd .vp-ss-label { color: var(--ink); text-align: left; }
+.vp-fdd-panel { position: fixed; z-index: 400; top: auto; right: auto; bottom: auto; left: 0; }
+.vp-fdd-panel[hidden] { display: none; }
+.vp-fdd-panel .vp-ss-opt { width: 100%; border: 0; background: none; font: inherit; font-size: 13.5px; text-align: left; flex-direction: row; }
+.vp-fdd-panel .vp-ss-opt:hover { background: var(--paper); }
+.vp-fdd-panel .vp-ss-opt.selected { background: var(--teal-soft); color: var(--teal); font-weight: 600; }
+@media (max-width: 720px) { .vp-filter-dd { width: 100%; flex: 1 1 100%; } }
+
+/* Reports: period bar + 5-up appointment summary */
+.vp-report-bar { margin-bottom: 18px; }
+.vp-report-nav { display: flex; align-items: center; gap: 10px; }
+.vp-report-nav strong { font-family: 'Fraunces', serif; font-size: 16px; font-weight: 600; min-width: 150px; text-align: center; }
+.vp-cal-nav.is-off { opacity: .35; cursor: default; display: inline-flex; align-items: center; justify-content: center; }
+.vp-appt-summary-5 { grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.vp-appt-summary-5 .vp-summary-item { padding: 18px 6px; }
+@media (max-width: 1100px) { .vp-appt-summary-5 { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 700px)  { .vp-appt-summary-5 { grid-template-columns: repeat(2, 1fr); } .vp-report-nav { width: 100%; justify-content: space-between; } }
+.vp-report-jump { display: flex; align-items: center; gap: 8px; margin-left: 6px; }
+.vp-report-jump label { font-size: 12px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+.vp-report-jump input { padding: 8px 11px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: inherit; font-size: 14px; width: auto; }
+.vp-report-jump input[type="number"] { width: 92px; }
+.vp-report-jump input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); }
+@media (max-width: 700px) { .vp-report-jump { width: 100%; margin: 0; } .vp-report-jump input { flex: 1; } }
+
+/* Reports: the period is one input box (no arrows) */
+.vp-report-jump {
+  display: inline-flex; align-items: center; gap: 0; margin: 0;
+  background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden;
+  transition: .15s;
+}
+.vp-report-jump:focus-within { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); }
+.vp-report-jump input, .vp-report-jump input:focus { border: 0; box-shadow: none; border-radius: 0; padding: 10px 13px; font-size: 14.5px; font-weight: 600; background: transparent; }
+.vp-report-jump input[type="number"] { width: 100px; }
+.vp-report-range { padding: 0 14px; align-self: stretch; display: flex; align-items: center; border-left: 1.5px solid var(--line-2); background: var(--paper-2); font-size: 13px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+@media (max-width: 700px) { .vp-report-jump { width: 100%; } .vp-report-jump input { flex: 1; min-width: 0; } }
+.vp-report-jump { position: relative; }
+.vp-report-pick { display: flex; align-items: center; gap: 9px; padding: 10px 14px; border: 0; background: transparent; font: inherit; font-size: 14.5px; font-weight: 600; color: var(--ink); cursor: pointer; white-space: nowrap; }
+.vp-report-pick svg:first-child, .vp-report-pick-ico svg { width: 17px; height: 17px; color: var(--teal); }
+.vp-report-pick-ico { display: flex; padding-left: 13px; }
+.vp-report-native { position: absolute; left: 0; bottom: 0; width: 100%; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+.vp-report-range { display: none; }

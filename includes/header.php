@@ -208,13 +208,140 @@ if ($staff) {
     }
 }
 
-$navBellCount = count($navNotifs);
+// ------------------------------------------------------------------
+// RECENT ACTIVITY — every system action, from the activity log, scoped
+// to who it concerns. The items above are standing "needs attention"
+// states; these are things that HAPPENED, with read/unread tracking.
+//   Staff  : clinical actions (appointments, patients, visits, vaccines,
+//            species), plus account actions if they can manage users.
+//   Owners : only actions on THEIR pets / appointments / own account.
+//            Visit actions are excluded — clinical notes stay with staff.
+// Your own actions are never shown back to you, and sign-in noise
+// (logins, logouts, recovery attempts) is left to the Activity Log page.
+// ------------------------------------------------------------------
+$navActivity = [];
+$navUnread   = 0;
+$seenAt      = null;
+try {
+    $s = $pdo->prepare("SELECT notifications_seen_at FROM users WHERE id = ?");
+    $s->execute([(int)$user['id']]);
+    $seenAt = $s->fetchColumn() ?: null;
+    $hasSeenCol = true;
+    // Never opened the bell before (incl. every account that existed when
+    // this feature shipped): start the clock now rather than flagging the
+    // whole history as unread.
+    if ($seenAt === null) {
+        $seenAt = date('Y-m-d H:i:s');
+        $pdo->prepare("UPDATE users SET notifications_seen_at = ? WHERE id = ?")->execute([$seenAt, (int)$user['id']]);
+    }
+} catch (Throwable $e) {
+    $hasSeenCol = false;   // column not migrated yet — everything reads as seen
+}
+
+$clinicalActions = ['appt_create','appt_request','appt_approve','appt_decline','appt_complete',
+    'patient_create','patient_update','patient_delete','patient_restore',
+    'visit_create','visit_update','visit_delete','visit_restore',
+    'vaccine_add','vaccine_update','vaccine_delete','vaccine_restore',
+    'species_create','species_delete','species_restore','schedule_update'];
+$accountActions  = ['user_create','user_update','user_delete','user_restore','user_activate',
+    'user_deactivate','permission_grant','permission_revoke','owner_create','password_change','purge'];
+$ownAccountActions = ['user_update','user_activate','user_deactivate','user_restore',
+    'password_change','permission_grant','permission_revoke'];
+
+// Joins resolve each action's target to a patient (for links, and for
+// working out which owner it belongs to).
+$actSql = "SELECT l.*, u.first_name AS actor_first, u.last_name AS actor_last,
+                  COALESCE(a.patient_id, vi.patient_id, vc.patient_id, pp.id) AS pid,
+                  COALESCE(pa.owner_id, pvi.owner_id, pvc.owner_id, pp.owner_id) AS pet_owner
+           FROM activity_log l
+           LEFT JOIN users u          ON u.id = l.actor_id
+           LEFT JOIN appointments a   ON l.action LIKE 'appt\\_%'    AND a.id  = l.target_id
+           LEFT JOIN patients pa      ON pa.id = a.patient_id
+           LEFT JOIN visits vi        ON l.action LIKE 'visit\\_%'   AND vi.id = l.target_id
+           LEFT JOIN patients pvi     ON pvi.id = vi.patient_id
+           LEFT JOIN vaccinations vc  ON l.action LIKE 'vaccine\\_%' AND vc.id = l.target_id
+           LEFT JOIN patients pvc     ON pvc.id = vc.patient_id
+           LEFT JOIN patients pp      ON l.action LIKE 'patient\\_%' AND pp.id = l.target_id
+           WHERE (l.actor_id IS NULL OR l.actor_id <> ?)";
+$actParams = [(int)$user['id']];
+
+if ($staff) {
+    $allowed = can_manage_users() ? array_merge($clinicalActions, $accountActions) : $clinicalActions;
+    $actSql .= " AND l.action IN (" . implode(',', array_fill(0, count($allowed), '?')) . ")";
+    $actParams = array_merge($actParams, $allowed);
+} else {
+    $petActions = array_values(array_filter($clinicalActions, fn($x) => strpos($x, 'visit_') !== 0 && strpos($x, 'species_') !== 0));
+    $actSql .= " AND (
+        (l.action IN (" . implode(',', array_fill(0, count($petActions), '?')) . ")
+            AND COALESCE(pa.owner_id, pvc.owner_id, pp.owner_id) = ?)
+        OR (l.action IN (" . implode(',', array_fill(0, count($ownAccountActions), '?')) . ") AND l.target_id = ?)
+    )";
+    $actParams = array_merge($actParams, $petActions, [(int)$user['owner_id']], $ownAccountActions, [(int)$user['id']]);
+}
+$actSql .= " ORDER BY l.id DESC LIMIT 20";
+
+try {
+    $aStmt = $pdo->prepare($actSql);
+    $aStmt->execute($actParams);
+    foreach ($aStmt->fetchAll() as $r) {
+        [$label, $tone] = audit_action_meta($r['action']);
+        $act = $r['action'];
+        $pid = (int)$r['pid'];
+
+        // Where clicking it should take you.
+        if (strpos($act, 'appt_') === 0) {
+            $href = 'appointments.php' . ($staff && $act === 'appt_request' ? '?status=Pending' : '');
+            $icon = 'cal';
+        } elseif (strpos($act, 'vaccine_') === 0) {
+            $href = $pid ? 'patient.php?id=' . $pid . '#vacc' : ($staff ? 'archive.php' : 'dashboard.php');
+            $icon = 'syringe';
+        } elseif (strpos($act, 'visit_') === 0) {
+            $href = $pid ? 'patient.php?id=' . $pid . '#visits' : 'archive.php';
+            $icon = 'log';
+        } elseif (strpos($act, 'patient_') === 0) {
+            $href = ($act === 'patient_delete') ? ($staff ? 'archive.php' : 'dashboard.php') : 'patient.php?id=' . $pid;
+            $icon = 'paw';
+        } elseif (strpos($act, 'species_') === 0) {
+            $href = 'patients.php'; $icon = 'paw';
+        } elseif ($act === 'schedule_update') {
+            // Day changes name their date — open the calendar on that month.
+            $ts   = strtotime((string)$r['target_label']);
+            $href = 'schedule.php' . ($ts && preg_match('/\d{4}/', (string)$r['target_label']) ? '?m=' . date('Y-m', $ts) : '');
+            $icon = 'clock';
+        } elseif ($act === 'purge') {
+            $href = 'archive.php'; $icon = 'trash';
+        } else {   // account actions
+            $href = $staff ? 'users.php' : 'account.php';
+            $icon = $staff ? 'users' : 'user';
+        }
+
+        $actor  = trim(($r['actor_first'] ?? '') . ' ' . ($r['actor_last'] ?? ''));
+        $unread = $hasSeenCol && $r['created_at'] > $seenAt;
+        if ($unread) $navUnread++;
+
+        $navActivity[] = [
+            'icon'   => $icon,
+            'tone'   => $tone,
+            'title'  => $label,
+            'by'     => $actor !== '' ? 'by ' . $actor : '',
+            'detail' => $r['details'] ?: ($r['target_label'] ?? ''),
+            'meta'   => time_ago($r['created_at']),
+            'href'   => $href,
+            'unread' => $unread,
+        ];
+    }
+} catch (Throwable $e) {
+    // Notifications must never break the page.
+}
+
+$navBellCount = count($navNotifs) + $navUnread;
 
 // Navigation items depend on role.
 $nav = $staff ? [
     ['key' => 'dashboard',    'label' => 'Dashboard',    'href' => 'dashboard.php',    'icon' => 'grid'],
     ['key' => 'patients',     'label' => 'Patients',     'href' => 'patients.php',     'icon' => 'paw'],
     ['key' => 'appointments', 'label' => 'Appointments', 'href' => 'appointments.php', 'icon' => 'cal'],
+    ['key' => 'schedule',     'label' => 'Schedule',     'href' => 'schedule.php',     'icon' => 'clock'],
     ['key' => 'reports',      'label' => 'Reports',      'href' => 'reports.php',      'icon' => 'chart'],
 ] : [
     ['key' => 'dashboard',    'label' => 'My Pets',      'href' => 'dashboard.php',    'icon' => 'paw'],
@@ -248,10 +375,11 @@ function nav_icon($name) {
         'user'  => '<circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"/>',
         'log'   => '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/>',
         'trash' => '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M12 11v6M9 11v6M15 11v6"/>',
+        'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
         'bell'  => '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>',
     ];
     $p = $icons[$name] ?? $icons['paw'];
-    $strokeIcons = ['cal', 'chart', 'users', 'user', 'log', 'syringe', 'trash', 'bell'];
+    $strokeIcons = ['clock', 'cal', 'chart', 'users', 'user', 'log', 'syringe', 'trash', 'bell'];
     $fill = in_array($name, $strokeIcons) ? 'none' : 'currentColor';
     $stroke = in_array($name, $strokeIcons) ? 'currentColor' : 'none';
     return "<svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"$fill\" stroke=\"$stroke\" "
@@ -277,7 +405,7 @@ $flashType   = get_flash_type();
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="alternate icon" href="assets/favicon.ico">
 <link rel="apple-touch-icon" href="assets/favicon-180.png">
-<link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/style.css?v=<?= @filemtime(__DIR__ . "/../assets/css/style.css") ?>">
 </head>
 <body data-page="<?= e($PAGE ?? '') ?>">
 <div class="vp-root">
@@ -294,7 +422,11 @@ $flashType   = get_flash_type();
 
     <nav class="vp-nav">
       <?php foreach ($nav as $item):
-        $active = ($PAGE === $item['key']) || ($item['key'] === 'patients' && $PAGE === 'record');
+        // A patient chart (patient.php, $PAGE = 'record') isn't itself a nav
+        // item, so highlight whichever list it was opened from: "Patients"
+        // for staff, "My Pets" for an owner (both use key 'dashboard' there).
+        $active = ($PAGE === $item['key'])
+            || ($PAGE === 'record' && $item['key'] === ($staff ? 'patients' : 'dashboard'));
       ?>
         <a href="<?= $item['href'] ?>" class="vp-nav-item <?= $active ? 'active' : '' ?>">
           <?= nav_icon($item['icon']) ?>
@@ -355,7 +487,9 @@ $flashType   = get_flash_type();
         <div class="vp-bell-wrap">
           <button type="button" class="vp-top-bell" id="vpBellBtn"
                   aria-label="Notifications<?= $navBellCount ? ' (' . $navBellCount . ' new)' : '' ?>"
-                  aria-haspopup="true" aria-expanded="false" aria-controls="vpBellPanel">
+                  aria-haspopup="true" aria-expanded="false" aria-controls="vpBellPanel"
+                  data-unread="<?= (int)$navUnread ?>" data-standing="<?= count($navNotifs) ?>"
+                  data-csrf="<?= e(csrf_token()) ?>">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
             <?php if ($navBellCount > 0): ?><span class="vp-bell-dot"><?= $navBellCount > 9 ? '9+' : $navBellCount ?></span><?php endif; ?>
           </button>
@@ -366,25 +500,45 @@ $flashType   = get_flash_type();
               <?php if ($navBellCount > 0): ?><span class="vp-bell-count"><?= $navBellCount ?></span><?php endif; ?>
             </div>
 
-            <?php if (!$navNotifs): ?>
+            <?php if (!$navNotifs && !$navActivity): ?>
               <div class="vp-bell-empty">
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
                 <p>You're all caught up.</p>
               </div>
             <?php else: ?>
               <div class="vp-bell-list">
-                <?php foreach ($navNotifs as $n): ?>
-                  <a class="vp-bell-item tone-<?= e($n['tone']) ?>" href="<?= e($n['href']) ?>">
-                    <span class="vp-bell-ico"><?= nav_icon($n['icon']) ?></span>
-                    <span class="vp-bell-txt">
-                      <span class="vp-bell-title"><?= e($n['owner']) ?><span class="vp-bell-pet"><?= e($n['pet']) ?></span></span>
-                      <span class="vp-bell-detail"><?= e($n['detail']) ?></span>
-                      <span class="vp-bell-meta"><?= e($n['meta']) ?></span>
-                    </span>
-                  </a>
-                <?php endforeach; ?>
+                <?php if ($navNotifs): ?>
+                  <div class="vp-bell-section">Needs attention</div>
+                  <?php foreach ($navNotifs as $n): ?>
+                    <a class="vp-bell-item tone-<?= e($n['tone']) ?>" href="<?= e($n['href']) ?>">
+                      <span class="vp-bell-ico"><?= nav_icon($n['icon']) ?></span>
+                      <span class="vp-bell-txt">
+                        <span class="vp-bell-title"><?= e($n['owner']) ?><span class="vp-bell-pet"><?= e($n['pet']) ?></span></span>
+                        <span class="vp-bell-detail"><?= e($n['detail']) ?></span>
+                        <span class="vp-bell-meta"><?= e($n['meta']) ?></span>
+                      </span>
+                    </a>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+                <?php if ($navActivity): ?>
+                  <div class="vp-bell-section">Recent activity</div>
+                  <?php foreach ($navActivity as $n): ?>
+                    <a class="vp-bell-item act-<?= e($n['tone']) ?><?= $n['unread'] ? ' unread' : '' ?>" href="<?= e($n['href']) ?>">
+                      <span class="vp-bell-ico"><?= nav_icon($n['icon']) ?></span>
+                      <span class="vp-bell-txt">
+                        <span class="vp-bell-title"><?= e($n['title']) ?><?php if ($n['by'] !== ''): ?><span class="vp-bell-pet"><?= e($n['by']) ?></span><?php endif; ?></span>
+                        <?php if ($n['detail'] !== ''): ?><span class="vp-bell-detail"><?= e($n['detail']) ?></span><?php endif; ?>
+                        <span class="vp-bell-meta"><?= e($n['meta']) ?></span>
+                      </span>
+                    </a>
+                  <?php endforeach; ?>
+                <?php endif; ?>
               </div>
-              <a class="vp-bell-foot" href="appointments.php">View all appointments</a>
+              <?php if (can_manage_users()): ?>
+                <a class="vp-bell-foot" href="activity.php">View full activity log</a>
+              <?php else: ?>
+                <a class="vp-bell-foot" href="appointments.php">View all appointments</a>
+              <?php endif; ?>
             <?php endif; ?>
           </div>
         </div>

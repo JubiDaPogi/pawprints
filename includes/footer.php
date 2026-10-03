@@ -165,10 +165,24 @@
       if (lastFocus) { try { lastFocus.focus(); } catch (e) {} }
     }
 
+    var titleEl = document.getElementById('vpConfirmTitle');
+    var iconEl  = document.getElementById('vpConfirmIcon');
+    var WARN_ICON = iconEl.innerHTML;
+    var OK_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
     function open(form, message) {
       pending = form;
       lastFocus = document.activeElement;
       msgEl.textContent = message;
+      // Forms can opt out of the default "destructive" look with
+      // data-confirm-tone="ok" (a green check + primary button), and
+      // customise the heading / button text.
+      var ok = form.getAttribute('data-confirm-tone') === 'ok';
+      titleEl.textContent = form.getAttribute('data-confirm-title') || 'Please confirm';
+      yesBtn.textContent  = form.getAttribute('data-confirm-yes') || 'Confirm';
+      yesBtn.className    = ok ? 'vp-btn-primary' : 'vp-btn-danger';
+      iconEl.classList.toggle('ok', ok);
+      iconEl.innerHTML    = ok ? OK_ICON : WARN_ICON;
       overlay.hidden = false;
       yesBtn.focus();
     }
@@ -205,6 +219,31 @@
         open(f, f.getAttribute('data-confirm'));
       });
     });
+  })();
+
+  // Tell every POST action which page (filters + #tab included) it was
+  // submitted from, so it can send the person back there afterwards
+  // instead of to the page's default view. See return_to_target() in
+  // includes/functions.php. Stamped at load and refreshed on submit,
+  // since tabs/filters can change the URL after the page loads.
+  (function () {
+    function here() {
+      var file = location.pathname.split('/').pop() || 'dashboard.php';
+      return file + location.search + location.hash;
+    }
+    function stamp(form) {
+      if ((form.getAttribute('method') || '').toLowerCase() !== 'post') return;
+      var f = form.querySelector('input[name="return_to"]');
+      if (!f) {
+        f = document.createElement('input');
+        f.type = 'hidden';
+        f.name = 'return_to';
+        form.appendChild(f);
+      }
+      f.value = here();
+    }
+    document.querySelectorAll('form').forEach(stamp);
+    document.addEventListener('submit', function (ev) { stamp(ev.target); }, true);
   })();
 
   // Lightweight modal open/close (used by the "New patient", "Log visit", etc. buttons).
@@ -397,6 +436,32 @@
       place();
       panel.hidden = false;
       btn.setAttribute('aria-expanded', 'true');
+      markSeen();
+    }
+
+    // Opening the bell counts as reading the new activity: record it
+    // server-side and drop those from the badge. The highlighted rows
+    // stay highlighted for this view so you can still tell what was new.
+    // "Needs attention" items are standing states, so they stay counted.
+    var seenSent = false;
+    function markSeen() {
+      if (seenSent || !(parseInt(btn.dataset.unread, 10) > 0) || !window.fetch) return;
+      seenSent = true;
+      var body = new FormData();
+      body.append('csrf', btn.dataset.csrf || '');
+      fetch('actions/notifications_seen.php', { method: 'POST', body: body, credentials: 'same-origin' })
+        .catch(function () {});
+      var left = parseInt(btn.dataset.standing, 10) || 0;
+      var dot = btn.querySelector('.vp-bell-dot');
+      var count = panel.querySelector('.vp-bell-count');
+      if (left > 0) {
+        if (dot) dot.textContent = left > 9 ? '9+' : left;
+        if (count) count.textContent = left;
+      } else {
+        if (dot) dot.remove();
+        if (count) count.remove();
+      }
+      btn.setAttribute('aria-label', 'Notifications' + (left ? ' (' + left + ' new)' : ''));
     }
     function close() {
       panel.hidden = true;
@@ -1002,5 +1067,84 @@
 })();
 </script>
 
+<!-- Filter chips → dropdown. Every row of filter chips (species, status,
+     category, role, archive tab) is shown as one dropdown instead. The chips
+     stay in the page, hidden; choosing an option clicks the matching chip, so
+     the links and form submits behave exactly as before. -->
+<script>
+(function () {
+  var CARET = '<svg class="vp-ss-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+  function esc(t) { return String(t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function clean(t) { return t.replace(/\s+/g, ' ').trim(); }
+
+  document.querySelectorAll('.vp-filter-chips').forEach(function (row) {
+    var chips = Array.prototype.slice.call(row.querySelectorAll('.vp-chip'));
+    if (chips.length < 2) return;
+    var label = row.getAttribute('data-label') || '';
+
+    var wrap = document.createElement('div');
+    wrap.className = 'vp-ss vp-filter-dd';
+    var trig = document.createElement('button');
+    trig.type = 'button';
+    trig.className = 'vp-ss-trigger';
+    trig.setAttribute('aria-haspopup', 'listbox');
+    trig.setAttribute('aria-expanded', 'false');
+    var panel = document.createElement('div');
+    panel.className = 'vp-ss-panel vp-fdd-panel';
+    panel.hidden = true;
+    var list = document.createElement('div');
+    list.className = 'vp-ss-list';
+    list.setAttribute('role', 'listbox');
+    panel.appendChild(list);
+    wrap.appendChild(trig);
+    // The list lives on <body>: page sections are animated (transformed), and
+    // a fixed element inside one is positioned relative to it, not the window.
+    document.body.appendChild(panel);
+
+    var active = chips.filter(function (c) { return c.classList.contains('active'); })[0] || chips[0];
+    trig.innerHTML = (label ? '<span class="vp-fdd-label">' + esc(label) + '</span>' : '')
+      + '<span class="vp-ss-label">' + esc(clean(active.textContent)) + '</span>' + CARET;
+
+    chips.forEach(function (chip) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'vp-ss-opt' + (chip === active ? ' selected' : '');
+      b.setAttribute('role', 'option');
+      b.textContent = clean(chip.textContent);
+      b.addEventListener('click', function () {
+        setOpen(false);
+        if (chip === active) return;
+        chip.click();            // same link / submit button as before
+      });
+      list.appendChild(b);
+    });
+
+    function place() {
+      var box = trig.getBoundingClientRect(), h = Math.min(list.scrollHeight + 14, 280);
+      var below = window.innerHeight - box.bottom - 12, up = below < h && box.top > below;
+      var w = Math.min(Math.max(box.width, 200), window.innerWidth - 24);
+      panel.style.left = Math.max(12, Math.min(box.left, window.innerWidth - w - 12)) + 'px';
+      panel.style.width = w + 'px';
+      panel.style.top = up ? '' : (box.bottom + 6) + 'px';
+      panel.style.bottom = up ? (window.innerHeight - box.top + 6) + 'px' : '';
+      list.style.maxHeight = Math.max(140, (up ? box.top : below) - 18) + 'px';
+    }
+    function setOpen(open) {
+      panel.hidden = !open;
+      wrap.classList.toggle('open', open);
+      trig.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) place();
+    }
+    trig.addEventListener('click', function () { setOpen(panel.hidden); });
+    document.addEventListener('click', function (e) { if (!wrap.contains(e.target) && !panel.contains(e.target)) setOpen(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) { setOpen(false); trig.focus(); } });
+    window.addEventListener('resize', function () { setOpen(false); });
+    document.addEventListener('scroll', function (e) { if (!panel.hidden && !panel.contains(e.target)) setOpen(false); }, true);
+
+    row.parentNode.insertBefore(wrap, row);
+    row.classList.add('vp-chips-hidden');
+  });
+})();
+</script>
 </body>
 </html>

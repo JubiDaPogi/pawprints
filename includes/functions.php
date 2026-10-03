@@ -84,6 +84,8 @@ function status_colors($status) {
         case 'Pending':          return ['var(--warn-bg)',  'var(--warn-fg)'];
         case 'Completed':        return ['var(--muted-bg)', 'var(--muted-fg)'];
         case 'Declined':         return ['var(--rose-soft)','var(--rose)'];
+        case 'Cancelled':        return ['var(--muted-bg)','var(--muted-fg)'];
+        case 'Expired':          return ['var(--muted-bg)','var(--muted-fg)'];
         default:                 return ['var(--muted-bg)', 'var(--muted-fg)'];
     }
 }
@@ -108,6 +110,17 @@ function slot_label($start, $end) {
     return date('A', $s) === date('A', $e)
         ? date('g:i', $s) . ' – ' . date('g:i A', $e)
         : date('g:i A', $s) . ' – ' . date('g:i A', $e);
+}
+
+/** An appointment's time as a range, e.g. "10:00 – 11:00 AM". Only the start
+ *  time is stored, so the end comes from the time slot that starts then; if
+ *  that slot no longer exists, just the start time is shown. */
+function appt_time_range($time) {
+    if ($time === null || $time === '') return '';
+    foreach (appt_slot_rows() as $r) {
+        if ($r['start_time'] === $time) return slot_label($r['start_time'], $r['end_time']);
+    }
+    return fmt_time($time);
 }
 
 /** All time-slot rows (id, start_time, end_time, capacity), earliest first.
@@ -168,17 +181,125 @@ function slot_rule_on($date, $time) {
 
 /** Appointments holding a place in a slot on a date. Pending requests
  *  count — they hold the place until staff decide — and so do Completed
- *  ones; only Declined frees a place. $excludeId leaves one out (used
+ *  ones; only Declined, Cancelled and Expired free a place. $excludeId leaves one out (used
  *  when approving a request, which is already counted in this total). */
 function slot_booked_count($date, $time, $excludeId = 0) {
     $st = $GLOBALS['pdo']->prepare(
         "SELECT COUNT(*) FROM appointments a JOIN patients p ON p.id = a.patient_id
-         WHERE a.appt_date = ? AND a.appt_time = ? AND a.status <> 'Declined'
+         WHERE a.appt_date = ? AND a.appt_time = ? AND a.status NOT IN ('Declined','Cancelled','Expired')
            AND p.deleted_at IS NULL AND a.id <> ?");
     $st->execute([$date, $time, (int)$excludeId]);
     return (int)$st->fetchColumn();
 }
 
+/** Give an appointment its reference code — APT-<appointment date as
+ *  YYYYMMDD>-<3-digit number for that day>, e.g. APT-20261020-002 — if it
+ *  doesn't have one yet, and return the code. Numbers are never reused: a
+ *  code stays with its appointment for good, so the next one that day
+ *  always takes the highest number so far + 1.
+ *  Called when staff approve a request or book an appointment directly.
+ *  The UNIQUE key on appt_code guards against two approvals racing for
+ *  the same number — the loser just takes the next one. */
+function assign_appt_code($pdo, $id) {
+    $st = $pdo->prepare("SELECT appt_code, appt_date FROM appointments WHERE id = ?");
+    $st->execute([(int)$id]);
+    $row = $st->fetch();
+    if (!$row) return null;
+    if ($row['appt_code']) return $row['appt_code'];
+    $prefix = 'APT-' . date('Ymd', strtotime($row['appt_date'])) . '-';
+    for ($try = 0; $try < 5; $try++) {
+        $max = $pdo->prepare("SELECT MAX(CAST(SUBSTRING(appt_code, ?) AS UNSIGNED)) FROM appointments WHERE appt_code LIKE ?");
+        $max->execute([strlen($prefix) + 1, $prefix . '%']);
+        $code = $prefix . str_pad((string)((int)$max->fetchColumn() + 1), 3, '0', STR_PAD_LEFT);
+        try {
+            $pdo->prepare("UPDATE appointments SET appt_code = ? WHERE id = ? AND appt_code IS NULL")->execute([$code, (int)$id]);
+            return $code;
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '23000') throw $e;   // duplicate — someone took it, try the next number
+        }
+    }
+    return null;
+}
+
+/** Save the schedule of every day that is over, as it stands right now, so
+ *  that viewing a past day later shows what was in force then — not whatever
+ *  the time slots happen to be set to by then. A day is over once it is
+ *  before today, or today after its last slot has started. Safe to call on
+ *  every request (it only writes days not yet saved); call it BEFORE any
+ *  change to the slots. */
+function freeze_past_days($pdo) {
+    try {
+        $today = date('Y-m-d');
+        $rows  = appt_slot_rows();
+        $over  = $rows && max(array_column($rows, 'start_time')) <= date('H:i:s');
+        $end   = $over ? $today : date('Y-m-d', strtotime('-1 day'));
+        // A saved day that isn't over by the clock (e.g. the computer's date was
+        // set back) isn't finished — drop it so it behaves as a normal day again.
+        $pdo->prepare("DELETE FROM appt_day_frozen WHERE the_date > ?")->execute([$end]);
+        $last  = $pdo->query("SELECT MAX(the_date) FROM appt_day_frozen")->fetchColumn();
+        if ($last) {
+            $start = date('Y-m-d', strtotime($last . ' +1 day'));
+        } else {
+            // First run: begin at the earliest day anything was ever set or booked.
+            $first = $pdo->query("SELECT MIN(d) FROM (
+                         SELECT MIN(the_date) d FROM appt_special_dates
+                         UNION ALL SELECT MIN(the_date) FROM appt_day_slots
+                         UNION ALL SELECT MIN(appt_date) FROM appointments) x")->fetchColumn();
+            if (!$first) return;
+            $start = max($first, date('Y-m-d', strtotime('-400 days')));
+        }
+        if ($start > $end) return;
+
+        $ov = appt_day_slot_overrides($start, $end);
+        $sp = [];
+        $st = $pdo->prepare("SELECT the_date, is_open, note FROM appt_special_dates WHERE the_date BETWEEN ? AND ?");
+        $st->execute([$start, $end]);
+        foreach ($st as $r) $sp[$r['the_date']] = $r;
+
+        $ins = $pdo->prepare("INSERT IGNORE INTO appt_day_frozen (the_date, day_open, note, slots) VALUES (?, ?, ?, ?)");
+        $pdo->beginTransaction();
+        for ($ts = strtotime($start); $ts <= strtotime($end); $ts = strtotime('+1 day', $ts)) {
+            $d = date('Y-m-d', $ts);
+            $slots = [];
+            foreach ($rows as $r) {
+                $t = $r['start_time'];
+                $o = $ov[$d][$t] ?? null;
+                $slots[] = ['t' => $t, 'e' => $r['end_time'], 'open' => $o ? $o['open'] : true,
+                            'cap' => $o ? $o['cap'] : ($r['capacity'] === null ? null : (int)$r['capacity'])];
+            }
+            $row = $sp[$d] ?? null;
+            $ins->execute([$d, $row ? (int)$row['is_open'] : 0, $row && $row['note'] !== null ? $row['note'] : null, json_encode($slots)]);
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();   // table not there yet — nothing is frozen
+    }
+}
+
+/** Any request still Pending when its appointment time arrives is marked
+ *  Expired — nobody approved it in time, so it can no longer be approved.
+ *  Runs on every signed-in page load and on the public lookup (cheap: one
+ *  UPDATE that usually matches nothing), and each expiry is logged so staff
+ *  and the owner are told. */
+function expire_pending_appointments($pdo) {
+    try {
+        $due = $pdo->query("SELECT a.id, a.appt_date, a.appt_time, p.name AS pname
+                            FROM appointments a JOIN patients p ON p.id = a.patient_id
+                            WHERE a.status = 'Pending'
+                              AND TIMESTAMP(a.appt_date, IFNULL(a.appt_time, '23:59:59')) <= NOW()")->fetchAll();
+        if (!$due) return;
+        $up = $pdo->prepare("UPDATE appointments SET status = 'Expired' WHERE id = ? AND status = 'Pending'");
+        foreach ($due as $r) {
+            $up->execute([(int)$r['id']]);
+            if ($up->rowCount() && function_exists('record_audit')) {
+                record_audit($pdo, 'appt_expire', (int)$r['id'], $r['pname'],
+                    'Request for ' . $r['pname'] . ' on ' . fmt_date($r['appt_date']) . ' at ' . fmt_time($r['appt_time'])
+                    . ' expired — it was not approved before the appointment time',
+                    ['id' => null, 'username' => 'system']);
+            }
+        }
+    } catch (Throwable $e) { /* never break a page over housekeeping */ }
+}
 /** True once a slot on today's date has started — it can't be booked any more. */
 function slot_has_started($date, $time) {
     return $date === date('Y-m-d') && $time <= date('H:i:s');
@@ -198,7 +319,7 @@ function upcoming_slot_usage() {
     try {
         $st = $GLOBALS['pdo']->prepare(
             "SELECT a.appt_date, a.appt_time, COUNT(*) n FROM appointments a JOIN patients p ON p.id = a.patient_id
-             WHERE a.appt_date >= ? AND a.status <> 'Declined' AND p.deleted_at IS NULL
+             WHERE a.appt_date >= ? AND a.status NOT IN ('Declined','Cancelled','Expired') AND p.deleted_at IS NULL
              GROUP BY a.appt_date, a.appt_time");
         $st->execute([date('Y-m-d')]);
         foreach ($st as $r) $out[$r['appt_date']][$r['appt_time']] = (int)$r['n'];
@@ -889,6 +1010,7 @@ function audit_action_meta($action) {
         'logout'           => ['Signed out',           'muted'],
         'login_failed'     => ['Failed sign-in',       'rose'],
         'login_denied'     => ['Sign-in blocked',      'rose'],
+        'appt_lookup_failed' => ['Appointment lookup failed', 'amber'],
         'profile_update'   => ['Profile updated',      'teal'],
         'password_change'  => ['Password changed',     'amber'],
         'security_update'  => ['Security settings',    'amber'],
@@ -912,6 +1034,8 @@ function audit_action_meta($action) {
         'appt_request'     => ['Appointment requested', 'amber'],
         'appt_approve'     => ['Appointment approved', 'teal'],
         'appt_decline'     => ['Appointment declined', 'rose'],
+        'appt_expire'      => ['Request expired',      'amber'],
+        'appt_cancel'     => ['Appointment cancelled', 'rose'],
         'appt_complete'    => ['Appointment done',    'teal'],
         'schedule_update'  => ['Schedule changed',    'amber'],
         'user_restore'     => ['Account restored',    'teal'],

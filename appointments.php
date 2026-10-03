@@ -33,15 +33,15 @@ if ($filter === 'Today') {
 }
 if ($q !== '') {
     // Match the pet, breed, species, reason, or the owner's full name.
-    $sql .= " AND (p.name LIKE ? OR p.breed LIKE ? OR p.species LIKE ? OR a.reason LIKE ? OR CONCAT_WS(' ', NULLIF(o.first_name,''), NULLIF(o.middle_name,''), NULLIF(o.last_name,'')) LIKE ?)";
+    $sql .= " AND (a.appt_code LIKE ? OR p.name LIKE ? OR p.breed LIKE ? OR p.species LIKE ? OR a.reason LIKE ? OR CONCAT_WS(' ', NULLIF(o.first_name,''), NULLIF(o.middle_name,''), NULLIF(o.last_name,'')) LIKE ?)";
     $like = "%$q%";
-    array_push($params, $like, $like, $like, $like, $like);
+    array_push($params, $like, $like, $like, $like, $like, $like);
 }
-// Completed and Declined are both settled — nothing left to act on — so
+// Completed, Declined and Cancelled are all settled — nothing left to act on — so
 // push them to the bottom regardless of date, keeping everything else
 // (what still needs attention) sorted by when it's happening, soonest
 // first.
-$sql .= " ORDER BY (a.status IN ('Completed','Declined')) ASC, a.appt_date ASC, a.appt_time ASC";
+$sql .= " ORDER BY (a.status IN ('Completed','Declined','Cancelled','Expired')) ASC, a.appt_date ASC, a.appt_time ASC";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
@@ -109,12 +109,12 @@ require 'includes/header.php';
 <form method="get" class="vp-toolbar" id="apptFilterForm" data-search-form data-search-key="appts">
   <div class="vp-search">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-    <input type="text" name="q" id="apptSearch" data-search-input value="<?= e($q) ?>" placeholder="<?= $staff ? 'Search by owner, pet, reason…' : 'Search by pet, reason…' ?>" autocomplete="off">
+    <input type="text" name="q" id="apptSearch" data-search-input data-appt-code value="<?= e($q) ?>" placeholder="<?= $staff ? 'Search by code, owner, pet, reason…' : 'Search by code, pet, reason…' ?>" autocomplete="off">
   </div>
   <!-- Keeps the active status filter when the search box submits. -->
   <input type="hidden" name="status" value="<?= e($filter) ?>">
   <div class="vp-filter-chips" data-label="Status">
-    <?php foreach (['All','Today','Pending','Scheduled','Completed','Declined'] as $f): ?>
+    <?php foreach (['All','Today','Pending','Scheduled','Completed','Declined','Cancelled','Expired'] as $f): ?>
       <!-- Carry the search term along so switching filters doesn't clear it. -->
       <a href="appointments.php?status=<?= $f ?><?= $q !== '' ? '&q=' . urlencode($q) : '' ?>" class="vp-chip <?= $filter === $f ? 'active' : '' ?>"><?= $f ?></a>
     <?php endforeach; ?>
@@ -138,7 +138,16 @@ require 'includes/header.php';
   <?php else: ?>
     <div class="vp-appt-full">
       <?php foreach ($appts as $a): ?>
-        <div class="vp-appt-full-row">
+        <?php
+          // Seconds until a pending request's time slot starts (server clock, so the
+          // page doesn't depend on this computer's clock being right).
+          $expiresIn = null;
+          if ($a['status'] === 'Pending' && !empty($a['appt_date'])) {
+              $left = strtotime($a['appt_date'] . ' ' . ($a['appt_time'] ?: '23:59:59')) - time();
+              if ($left > 0) $expiresIn = $left;
+          }
+        ?>
+        <div class="vp-appt-full-row"<?= $expiresIn !== null ? ' data-expires-in="' . (int)$expiresIn . '"' : '' ?>>
           <div class="vp-appt-cal">
             <span class="vp-appt-mon"><?= date('M', strtotime($a['appt_date'])) ?></span>
             <span class="vp-appt-day"><?= date('j', strtotime($a['appt_date'])) ?></span>
@@ -156,10 +165,27 @@ require 'includes/header.php';
               <span class="vp-appt-breed"><?php if ($staff): ?><?= e($a['pet_name']) ?> · <?php endif; ?><?= e($a['species']) ?><?= !empty($a['breed']) ? ' · ' . e($a['breed']) : '' ?></span>
             </div>
             <span class="vp-appt-reason"><?= e($a['reason']) ?></span>
+            <?php if (!empty($a['appt_code'])): ?>
+              <button type="button" class="vp-appt-code" data-copy-code="<?= e($a['appt_code']) ?>" title="Click to copy this code"># <?= e($a['appt_code']) ?></button>
+            <?php elseif ($a['status'] === 'Pending'): ?>
+              <span class="vp-appt-code pending" title="A code is given when the clinic approves the request">Code given on approval</span>
+            <?php endif; ?>
             <span class="vp-appt-time">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-              <?= fmt_time($a['appt_time']) ?>
+              <?= appt_time_range($a['appt_time']) ?>
             </span>
+            <?php if ($a['status'] === 'Expired'): ?>
+              <span class="vp-appt-declined-note is-cancelled">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                Not approved before the appointment time<?= $staff ? '' : ' — please send a new request' ?>
+              </span>
+            <?php endif; ?>
+            <?php if ($a['status'] === 'Cancelled'): ?>
+              <span class="vp-appt-declined-note is-cancelled">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+                Cancelled by <?= $staff ? 'the owner' : 'you' ?><?= !empty($a['cancelled_at']) ? ' on ' . e(fmt_date($a['cancelled_at'])) : '' ?><?= !empty($a['cancel_reason']) ? ' — ' . e($a['cancel_reason']) : '' ?>
+              </span>
+            <?php endif; ?>
             <?php if ($a['status'] === 'Declined' && !empty($a['decline_reason'])): ?>
               <span class="vp-appt-declined-note">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
@@ -171,7 +197,7 @@ require 'includes/header.php';
             <?= status_pill($a['status']) ?>
             <?php if ($staff && $a['status'] === 'Pending'): ?>
               <form method="post" action="actions/approve_appointment.php" style="display:inline"
-                    data-confirm="Approve this request and schedule the appointment for <?= e($a['pet_name']) ?> on <?= e(fmt_date($a['appt_date'])) ?> at <?= e(fmt_time($a['appt_time'])) ?>?"
+                    data-confirm="Approve this request and schedule the appointment for <?= e($a['pet_name']) ?> on <?= e(fmt_date($a['appt_date'])) ?> at <?= e(appt_time_range($a['appt_time'])) ?>?"
                     data-confirm-title="Approve appointment" data-confirm-yes="Approve" data-confirm-tone="ok">
                 <?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int)$a['id'] ?>">
@@ -193,6 +219,11 @@ require 'includes/header.php';
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Mark done
                 </button>
               </form>
+            <?php endif; ?>
+            <?php if (!$staff && in_array($a['status'], ['Pending', 'Scheduled'], true) && $a['appt_date'] >= date('Y-m-d')): ?>
+              <button type="button" class="vp-btn-tiny ghost vp-btn-cancel" data-open-modal="modal-cancel-<?= (int)$a['id'] ?>">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg> Cancel
+              </button>
             <?php endif; ?>
             <a class="vp-btn-tiny ghost" href="patient.php?id=<?= (int)$a['pid'] ?>">Chart</a>
           </div>
@@ -230,6 +261,40 @@ require 'includes/header.php';
           <div class="vp-form-actions">
             <button type="button" class="vp-btn-ghost" data-close-modal>Cancel</button>
             <button type="submit" class="vp-btn-primary">Decline request</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+<?php endforeach; endif; ?>
+
+<?php if (!$staff):
+  // Cancel modals, outside the list card for the same reason as above.
+  foreach ($appts as $a):
+    if (!in_array($a['status'], ['Pending', 'Scheduled'], true) || $a['appt_date'] < date('Y-m-d')) continue; ?>
+  <div class="vp-modal-overlay" id="modal-cancel-<?= (int)$a['id'] ?>">
+    <div class="vp-modal">
+      <div class="vp-modal-head vp-modal-head-center">
+        <div>
+          <div class="vp-confirm-icon decline">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </div>
+          <h3>Cancel appointment?</h3>
+          <p><?= e($a['pet_name']) ?> · <?= e(fmt_date($a['appt_date'])) ?> at <?= e(appt_time_range($a['appt_time'])) ?><?= !empty($a['appt_code']) ? ' · ' . e($a['appt_code']) : '' ?></p>
+        </div>
+      </div>
+      <form method="post" action="actions/cancel_appointment.php">
+        <?= csrf_field() ?>
+        <input type="hidden" name="id" value="<?= (int)$a['id'] ?>">
+        <div class="vp-modal-body">
+          <div class="vp-field full">
+            <label>Reason <small>(optional — lets the clinic know)</small></label>
+            <textarea name="cancel_reason" rows="3" maxlength="255" placeholder="e.g. My pet is feeling better, schedule conflict"></textarea>
+          </div>
+          <p class="vp-hint-text">This can't be undone. To come in another day, send a new request.</p>
+          <div class="vp-form-actions">
+            <button type="button" class="vp-btn-ghost" data-close-modal>Keep appointment</button>
+            <button type="submit" class="vp-btn-primary vp-btn-danger-solid">Cancel appointment</button>
           </div>
         </div>
       </form>
@@ -357,6 +422,7 @@ require 'includes/header.php';
     return { open: true, cap: SCHED.cap[k] };
   }
 
+  var CAL_ICO = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>';
   var NOTE_ICO = "<svg class=\"vp-note-ico\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-label=\"Note\"><path d=\"M5 4h14v11l-5 5H5z\"\/><path d=\"M14 20v-5h5M8.5 9h7M8.5 12.5h4\"\/><\/svg>";
   function esc(t) { return String(t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -374,7 +440,8 @@ require 'includes/header.php';
     var sp = SCHED.special[v];
     var open = sp ? !!sp.open : !!SCHED.open[parse(v).getDay()];
     var keys = slotKeys.filter(function (k) { return rule(v, k).open; });
-    if (!open || !keys.length) return { state: 'closed', note: sp && sp.note };
+    if (!open) return { state: 'closed', note: sp && sp.note };
+    if (!keys.length) return { state: 'closed', noSlots: true };   // open day, but no time left / all slots off
     var used = SCHED.used[v] || {}, left = 0, unlimited = false;
     keys.forEach(function (k) {
       var cap = rule(v, k).cap;
@@ -413,9 +480,18 @@ require 'includes/header.php';
       return '<span class="vp-tp-time">' + esc(o.dataset.label || o.textContent) + '</span>'
         + (o.dataset.st ? '<span class="vp-tp-st ' + o.dataset.tone + '">' + esc(o.dataset.st) + '</span>' : '');
     }
+    // No bookable day chosen yet: the Time field is switched off.
+    var off = false;
+    function setDisabled(v) {
+      off = !!v;
+      trig.disabled = off;
+      wrap.classList.toggle('is-disabled', off);
+      if (off) setOpen(false);
+      render();
+    }
     function render() {
       var cur = sel.options[sel.selectedIndex];
-      trig.querySelector('.vp-ss-label').innerHTML = cur ? row(cur) : '';
+      trig.querySelector('.vp-ss-label').innerHTML = off ? '<span class="vp-tp-time vp-tp-hint">Choose a day first</span>' : (cur ? row(cur) : '');
       list.innerHTML = '';
       Array.prototype.forEach.call(sel.options, function (o) {
         var b = document.createElement('button');
@@ -465,7 +541,7 @@ require 'includes/header.php';
     document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) setOpen(false); });
     wrap.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) { e.stopPropagation(); setOpen(false); trig.focus(); } });
     render();
-    return { render: render };
+    return { render: render, setDisabled: setDisabled };
   }
 
   ['scheduleDate', 'apptReqDate'].forEach(function (id) {
@@ -485,20 +561,34 @@ require 'includes/header.php';
     // grey started / not available.
     var picker = timeSel ? makeTimePicker(timeSel) : null;
 
-    // If the suggested day is already full, start on the next one with room.
+    // If the suggested day isn't bookable, start on the next one that is.
+    // If no day is open at all, leave the field empty — never preselect a
+    // closed day.
+    var anyOpen = false;
     if (!input.value || dayInfo(input.value).state !== 'open') {
+      input.value = '';
       var t = parse(SCHED.today);
       for (var i = 0; i < 366; i++) {
         var v = fmt(new Date(t.getFullYear(), t.getMonth(), t.getDate() + i));
         if (dayInfo(v).state === 'open') { input.value = v; break; }
       }
     }
+    anyOpen = !!input.value;
     var view;
 
     // Show places left in each slot for the chosen date; full slots are
     // greyed out and skipped if one was selected.
     function syncTimes() {
       if (!timeSel) return;
+      // No day picked (none open yet, or not chosen): nothing to pick a time for.
+      if (!input.value) {
+        timeSel.disabled = true;            // not submitted, not validated
+        timeSel.setCustomValidity('');
+        if (picker) picker.setDisabled(true);
+        return;
+      }
+      timeSel.disabled = false;
+      if (picker) picker.setDisabled(false);
       var used = (input.value && SCHED.used[input.value]) || {};
       var firstOpen = null;
       Array.prototype.forEach.call(timeSel.options, function (o) {
@@ -528,16 +618,16 @@ require 'includes/header.php';
       syncTimes();
       var v = input.value, msg = '';
       if (!v) {
-        msg = 'Please choose a day.';
+        msg = anyOpen ? 'Please choose a day.' : 'No days are open for booking yet — please check back soon or contact the clinic.';
       } else {
         var info = dayInfo(v);
         if (info.state === 'past') msg = 'That day has already passed — please pick another day.';
         if (info.state === 'full') msg = 'Every slot is full on this day — please pick another day.';
-        if (info.state === 'closed') msg = SCHED.special[v]
-          ? 'The clinic is closed on this date' + (info.note ? ' (' + info.note + ')' : '') + ' — please pick another day.'
-          : 'The clinic is closed on ' + DAYS[parse(v).getDay()] + 's — please pick another day.';
+        if (info.state === 'closed') msg = info.noSlots
+          ? (v === SCHED.today ? 'No time slots are left today — please pick another day.' : 'No time slots are available on this day — please pick another day.')
+          : 'The clinic is closed on this date' + (info.note ? ' (' + info.note + ')' : '') + ' — please pick another day.';
       }
-      trigger.querySelector('.vp-cal-trigger-text').textContent = v ? pretty(v) : 'Choose a day';
+      trigger.querySelector('.vp-cal-trigger-text').textContent = v ? pretty(v) : (anyOpen ? 'Choose a day' : 'No days open yet');
       trigger.classList.toggle('is-invalid', !!msg);
       note.textContent = msg;
       return !msg;
@@ -546,10 +636,16 @@ require 'includes/header.php';
     function render() {
       var y = view.getFullYear(), m = view.getMonth(), t = parse(SCHED.today);
       var atStart = y < t.getFullYear() || (y === t.getFullYear() && m <= t.getMonth());
-      var h = '<div class="vp-cal-head">'
-        + '<button type="button" class="vp-cal-nav" data-nav="-1" aria-label="Previous month"' + (atStart ? ' disabled' : '') + '>&#8249;</button>'
-        + '<strong>' + MONTHS[m] + ' ' + y + '</strong>'
-        + '<button type="button" class="vp-cal-nav" data-nav="1" aria-label="Next month">&#8250;</button></div>'
+      // Month header = the same month picker as the other pages: click it and
+      // pick any month/year from the browser's month grid (earlier months are
+      // greyed out).
+      var ym = y + '-' + pad(m + 1), minYm = t.getFullYear() + '-' + pad(t.getMonth() + 1);
+      var h = '<div class="vp-cal-head vp-cal-head-pick"><div class="vp-report-jump">'
+        + '<button type="button" class="vp-report-pick" data-pickmonth>'
+        + CAL_ICO + '<span>' + MONTHS[m] + ' ' + y + '</span>'
+        + '<svg class="vp-ss-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>'
+        + '<input class="vp-report-native" tabindex="-1" aria-hidden="true" type="month" data-monthinput value="' + ym + '" min="' + minYm + '">'
+        + '</div></div>'
         + '<div class="vp-cal-grid">';
       DAYS.forEach(function (d) { h += '<span class="vp-cal-dow">' + d.slice(0, 2) + '</span>'; });
       var lead = new Date(y, m, 1).getDay(), count = new Date(y, m + 1, 0).getDate();
@@ -602,9 +698,14 @@ require 'includes/header.php';
     }
 
     trigger.addEventListener('click', function () { setOpen(cal.hidden); });
+    cal.addEventListener('change', function (e) {
+      if (!e.target.matches('[data-monthinput]') || !e.target.value) return;
+      view = parse(e.target.value + '-01');
+      render();
+    });
     cal.addEventListener('click', function (e) {
-      var nav = e.target.closest('[data-nav]');
-      if (nav) { view.setMonth(view.getMonth() + (+nav.dataset.nav)); render(); return; }
+      var pick = e.target.closest('[data-pickmonth]');
+      if (pick) { var mi = pick.nextElementSibling; try { mi.showPicker(); } catch (err) { mi.focus(); mi.click(); } return; }
       var day = e.target.closest('[data-date]');
       if (day && !day.disabled) {
         input.value = day.dataset.date;
@@ -622,6 +723,36 @@ require 'includes/header.php';
     if (overlay) new MutationObserver(function () { if (!overlay.classList.contains('open')) setOpen(false); })
       .observe(overlay, { attributes: true, attributeFilter: ['class'] });
     check();
+  });
+})();
+</script>
+
+<script>
+/* A pending request expires the moment its time slot starts. The server does it on the next
+   page load; this makes a page that is already open show it too, without a reload. */
+(function () {
+  var NOTE = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Not approved before the appointment time<?= $staff ? '' : ' — please send a new request' ?>';
+  var t0 = Date.now();
+  document.querySelectorAll('.vp-appt-full-row[data-expires-in]').forEach(function (row) {
+    var ms = parseInt(row.getAttribute('data-expires-in'), 10) * 1000;
+    if (!(ms > 0) || ms > 2147000000) return;                      // setTimeout's limit
+    setTimeout(function () {
+      var pill = row.querySelector('.vp-pill');
+      if (pill) {
+        pill.style.background = 'var(--muted-bg)'; pill.style.color = 'var(--muted-fg)';
+        var dot = pill.querySelector('.vp-pill-dot'); if (dot) dot.style.background = 'var(--muted-fg)';
+        Array.prototype.slice.call(pill.childNodes).forEach(function (n) { if (n.nodeType === 3) n.textContent = 'Expired'; });
+      }
+      // No more Approve / Decline / Cancel on it.
+      row.querySelectorAll('form[action*="approve_appointment"], form[action*="complete_appointment"], .vp-btn-cancel, [data-open-modal^="modal-decline-"], [data-open-modal^="modal-cancel-"]').forEach(function (el) { el.remove(); });
+      var info = row.querySelector('.vp-appt-full-info');
+      var pend = row.querySelector('.vp-appt-code.pending'); if (pend) pend.remove();   // it will never get a code
+      if (info && !info.querySelector('.is-expired')) {
+        var n = document.createElement('span');
+        n.className = 'vp-appt-declined-note is-cancelled is-expired'; n.innerHTML = NOTE; info.appendChild(n);
+      }
+      row.removeAttribute('data-expires-in');
+    }, ms);
   });
 })();
 </script>

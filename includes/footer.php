@@ -16,6 +16,40 @@
   </main>
 </div><!-- /.vp-root -->
 
+<!-- Sidebar hamburger. Desktop: collapse to the icon rail and back (remembered
+     per browser). Phones / tablets (the sidebar is already the icon rail):
+     open the full menu over the page; tap outside or press Esc to close. -->
+<script>
+(function () {
+  var btn = document.getElementById('vpMenuBtn'), root = document.documentElement;
+  if (!btn) return;
+  var small = window.matchMedia('(max-width: 840px)');
+  function sync() {
+    var expanded = small.matches ? root.classList.contains('vp-side-open') : !root.classList.contains('vp-side-collapsed');
+    btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    var label = small.matches ? (expanded ? 'Close menu' : 'Open menu') : (expanded ? 'Collapse menu' : 'Expand menu');
+    btn.setAttribute('aria-label', label); btn.title = label;
+  }
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (small.matches) {
+      root.classList.toggle('vp-side-open');
+    } else {
+      var c = root.classList.toggle('vp-side-collapsed');
+      try { localStorage.setItem('pp-side', c ? 'collapsed' : 'open'); } catch (err) {}
+    }
+    sync();
+  });
+  document.addEventListener('click', function (e) {
+    if (root.classList.contains('vp-side-open') && !e.target.closest('#vpSide')) { root.classList.remove('vp-side-open'); sync(); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && root.classList.contains('vp-side-open')) { root.classList.remove('vp-side-open'); sync(); btn.focus(); }
+  });
+  (small.addEventListener ? small.addEventListener('change', function () { root.classList.remove('vp-side-open'); sync(); }) : small.addListener(sync));
+  sync();
+})();
+</script>
 <!-- Color theme switcher. -->
 <script>
 (function () {
@@ -190,6 +224,7 @@
     yesBtn.addEventListener('click', function () {
       var form = pending;
       close();
+      if (form && form.tagName === 'A') { window.location.href = form.href; return; }   // a link (e.g. Sign out)
       if (form) {
         // Mark it so the submit handler lets this one through.
         form.dataset.confirmed = '1';
@@ -210,6 +245,15 @@
         ev.preventDefault();
         (document.activeElement === yesBtn ? noBtn : yesBtn).focus();
       }
+    });
+
+    // Links can ask first too: <a href="…" data-confirm="…">.
+    document.querySelectorAll('a[data-confirm]').forEach(function (a) {
+      a.addEventListener('click', function (ev) {
+        if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1) return;   // open-in-new-tab etc.
+        ev.preventDefault();
+        open(a, a.getAttribute('data-confirm'));
+      });
     });
 
     document.querySelectorAll('form[data-confirm]').forEach(function (f) {
@@ -1012,6 +1056,69 @@
 })();
 </script>
 
+<script>
+// Click an appointment code to copy it (just the code, e.g. APT-20260723-001).
+(function () {
+  function legacyCopy(t) {                              // works where the clipboard API isn't allowed
+    return new Promise(function (ok, fail) {
+      var ta = document.createElement('textarea');
+      ta.value = t; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      var done = false;
+      try { done = document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      done ? ok() : fail();
+    });
+  }
+  function copyText(t) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(t).catch(function () { return legacyCopy(t); });
+    }
+    return legacyCopy(t);
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-copy-code]');
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();           // never follow a surrounding link
+    var code = b.getAttribute('data-copy-code'), label = b.getAttribute('data-label') || b.textContent;
+    b.setAttribute('data-label', label);
+    copyText(code).then(function () { b.classList.add('is-copied'); b.textContent = 'Copied!'; })
+                  .catch(function () { b.classList.add('is-copied'); b.textContent = 'Press Ctrl+C'; });
+    clearTimeout(b._t);
+    b._t = setTimeout(function () { b.classList.remove('is-copied'); b.textContent = label; }, 1400);
+  });
+})();</script>
+
+<!-- Appointment-code search boxes (input[data-appt-code]): typing "apt…" gives
+     capitals and dashes (APT-YYYYMMDD-001), and pasting keeps just the code —
+     "# APT-20260723-001 Scheduled" becomes "APT-20260723-001". Other text is
+     left exactly as typed or pasted. -->
+<script>
+(function () {
+  function isCode(v) { return /^[\s#]*apt[\s\-]*[\d\s\-]*$/i.test(v); }
+  function format(raw) {
+    var m = raw.match(/apt([\s\-]*[\d\s\-]*)/i), rest = m ? m[1] : '';
+    var d = rest.replace(/\D/g, '').slice(0, 11), tail = /[\s\-]$/.test(rest);
+    if (!d.length) return tail ? 'APT-' : 'APT';
+    if (d.length < 8) return 'APT-' + d;
+    if (d.length === 8) return 'APT-' + d + (tail ? '-' : '');
+    return 'APT-' + d.slice(0, 8) + '-' + d.slice(8);
+  }
+  document.querySelectorAll('input[data-appt-code]').forEach(function (input) {
+    function setVal(f) { input.value = f; input.setSelectionRange(f.length, f.length); }
+    input.addEventListener('input', function () {
+      if (isCode(input.value)) { var f = format(input.value); if (f !== input.value) setVal(f); }
+    });
+    input.addEventListener('paste', function (e) {
+      var text = (e.clipboardData || window.clipboardData).getData('text') || '';
+      if (!/apt[\s\-]*\d/i.test(text)) return;          // not a code — paste normally
+      e.preventDefault();
+      setVal(format(text.match(/apt[\s\-]*\d[\d\s\-]*/i)[0]));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  });
+})();
+</script>
 <!-- Reusable debounced search: any <form data-search-form> with a text
      input[data-search-input] auto-submits shortly after typing stops, keeps
      the caret where it was across the reload, and lets filter chips/links

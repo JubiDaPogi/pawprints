@@ -64,7 +64,7 @@ if ($staff) {
 
     // Owner's upcoming appointments.
     $stmt = $pdo->prepare("
-        SELECT a.*, p.name AS pet_name FROM appointments a
+        SELECT a.*, p.name AS pet_name, p.species, p.breed FROM appointments a
         JOIN patients p ON p.id = a.patient_id
         WHERE p.owner_id = ? AND a.status = 'Scheduled' AND p.deleted_at IS NULL
         ORDER BY a.appt_date ASC
@@ -98,7 +98,7 @@ require 'includes/header.php';
           <?= empty_row('cal', 'Nothing scheduled yet.') ?>
         <?php else: foreach ($upcoming as $a): $apptToday = is_today($a['appt_date']); ?>
           <a class="vp-appt-row link" href="patient.php?id=<?= (int)$a['pid'] ?>">
-            <div class="vp-appt-date"><span class="<?= $apptToday ? 'vp-today-tag' : '' ?>"><?= $apptToday ? 'Today' : fmt_date($a['appt_date']) ?></span><small><?= fmt_time($a['appt_time']) ?></small></div>
+            <div class="vp-appt-date"><span class="<?= $apptToday ? 'vp-today-tag' : '' ?>"><?= $apptToday ? 'Today' : fmt_date($a['appt_date']) ?></span><small><?= appt_time_range($a['appt_time']) ?></small></div>
             <div class="vp-appt-info"><strong><?= e(format_name_formal($a['owner_first'], $a['owner_middle'], $a['owner_last'])) ?></strong><span><?= e($a['pet_name']) ?> · <?= e($a['species']) ?> · <?= e($a['breed']) ?> · <?= e($a['reason']) ?></span></div>
             <svg class="vp-appt-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
           </a>
@@ -184,8 +184,8 @@ require 'includes/header.php';
       <?= empty_row('cal', 'No upcoming appointments scheduled.') ?>
     <?php else: foreach ($myAppts as $a): ?>
       <div class="vp-appt-row">
-        <div class="vp-appt-date"><span><?= fmt_date($a['appt_date']) ?></span><small><?= fmt_time($a['appt_time']) ?></small></div>
-        <div class="vp-appt-info"><strong><?= e($a['pet_name']) ?></strong><span><?= e($a['reason']) ?></span></div>
+        <div class="vp-appt-date"><span><?= fmt_date($a['appt_date']) ?></span><small><?= appt_time_range($a['appt_time']) ?></small></div>
+        <div class="vp-appt-info"><strong><?= e($a['pet_name']) ?></strong><span class="vp-appt-kind"><?= e(implode(' · ', array_filter([$a['species'], $a['breed']], fn($x) => trim((string)$x) !== ''))) ?></span><span><?= e($a['reason']) ?></span><?php if (!empty($a['appt_code'])): ?><button type="button" class="vp-appt-code" data-copy-code="<?= e($a['appt_code']) ?>" title="Click to copy this code"># <?= e($a['appt_code']) ?></button><?php endif; ?></div>
         <?= status_pill($a['status']) ?>
       </div>
     <?php endforeach; endif; ?>

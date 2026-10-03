@@ -194,16 +194,25 @@ CREATE TABLE vaccinations (
 -- ------------------------------------------------------------
 CREATE TABLE appointments (
     id          INT AUTO_INCREMENT PRIMARY KEY,
+    -- Reference code (e.g. APT-20261020-002: appointment date + number for
+    -- that day, never reused), given by the system when the
+    -- appointment is approved / booked by staff. NULL while still Pending.
+    appt_code   VARCHAR(20) NULL UNIQUE,
     patient_id  INT NOT NULL,
     appt_date   DATE NOT NULL,
     appt_time   TIME,
     reason      VARCHAR(200),
     -- 'Pending' = requested by a pet owner, awaiting staff approval.
     -- 'Declined' = staff turned down a pending request.
-    status          ENUM('Pending','Scheduled','Completed','Declined') DEFAULT 'Scheduled',
+    -- 'Cancelled' = the owner cancelled it (keeps its code; frees its place).
+    -- 'Expired'   = a request nobody approved before its appointment time; set
+    --               automatically by the system (expire_pending_appointments()).
+    status          ENUM('Pending','Scheduled','Completed','Declined','Cancelled','Expired') DEFAULT 'Scheduled',
     -- Staff's reason/remarks when declining a request — shown back to the
     -- owner so they know why, and kept for the clinic's own record.
     decline_reason  VARCHAR(255) NULL,
+    cancel_reason   VARCHAR(255) NULL,
+    cancelled_at    DATETIME NULL,
     FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
@@ -241,6 +250,17 @@ CREATE TABLE appt_special_dates (
 -- Per-date changes to individual slots, set from the Schedule calendar:
 -- a row turns one slot off for that date, or gives it a different number
 -- of places (capacity NULL = no limit). No row = the slot's usual setting.
+-- A day's schedule as it stood when the day ended (open/closed, note, each
+-- slot's on/off and places). Past days are viewed from this, so later edits
+-- to the time slots never rewrite history.
+CREATE TABLE appt_day_frozen (
+    the_date  DATE PRIMARY KEY,
+    day_open  TINYINT(1) NOT NULL DEFAULT 0,
+    note      VARCHAR(150) NULL,
+    slots     TEXT NOT NULL,
+    frozen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 CREATE TABLE appt_day_slots (
     the_date   DATE NOT NULL,
     start_time TIME NOT NULL,

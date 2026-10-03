@@ -27,6 +27,9 @@ verify_csrf('../schedule.php');
 $op   = $_POST['op'] ?? '';
 $back = '../schedule.php';
 
+// Save finished days as they stand BEFORE this change touches the slots.
+freeze_past_days($pdo);
+
 /** "HH:MM" or "HH:MM:SS" from an <input type="time"> → "HH:MM:00", or null. */
 function clean_time($t) {
     $t = trim((string)$t);
@@ -306,13 +309,17 @@ function calendar_target_dates($date, $scope) {
     $d = DateTime::createFromFormat('!Y-m-d', $date);
     if (!$d || $d->format('Y-m-d') !== $date) return null;
     $today = date('Y-m-d');
-    if ($scope === 'day') return $date >= $today ? [$date] : [];
+    // Days already saved as finished (incl. today once its last slot has
+    // started) are read-only.
+    $frozen = [];
+    try { $frozen = $GLOBALS['pdo']->query("SELECT the_date FROM appt_day_frozen WHERE the_date >= '$today'")->fetchAll(PDO::FETCH_COLUMN); } catch (Throwable $e) {}
+    if ($scope === 'day') return ($date >= $today && !in_array($date, $frozen, true)) ? [$date] : [];
     $out = [];
     $end = $d->format('Y-m-t');
     $dow = $d->format('N');
     for ($c = clone $d; $c->format('Y-m-d') <= $end; $c->modify('+1 day')) {
         $v = $c->format('Y-m-d');
-        if ($v < $today) continue;
+        if ($v < $today || in_array($v, $frozen, true)) continue;
         if ($scope === 'weekday' && $c->format('N') !== $dow) continue;
         $out[] = $v;
     }

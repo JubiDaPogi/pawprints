@@ -16,6 +16,7 @@ $row = $pdo->prepare("SELECT a.*, p.name AS pname FROM appointments a JOIN patie
 $row->execute([$id]);
 $a = $row->fetch();
 if (!$a) { set_flash('That appointment request no longer exists.'); redirect('../appointments.php'); }
+if ($a['status'] === 'Expired') { set_flash('That request has expired — its appointment time has passed, so it can no longer be declined.'); redirect('../appointments.php'); }
 if ($a['status'] !== 'Pending') { set_flash('That request has already been handled.'); redirect('../appointments.php'); }
 
 $pdo->prepare("UPDATE appointments SET status = 'Declined', decline_reason = ? WHERE id = ?")

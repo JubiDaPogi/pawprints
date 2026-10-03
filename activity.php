@@ -10,8 +10,8 @@ $PAGE_TITLE = 'Activity Log';
 // Group filter.
 $groups = [
     'All'          => [],
-    'Sign-ins'     => ['login', 'logout', 'login_failed', 'login_denied'],
-    'Appointments' => ['appt_request', 'appt_approve', 'appt_decline', 'appt_create', 'appt_complete', 'reminders_run'],
+    'Sign-ins'     => ['login', 'logout', 'login_failed', 'login_denied', 'appt_lookup_failed'],
+    'Appointments' => ['appt_request', 'appt_approve', 'appt_decline', 'appt_cancel', 'appt_expire', 'appt_create', 'appt_complete', 'reminders_run'],
     'Records'      => ['patient_create', 'patient_update', 'patient_delete', 'patient_restore',
                        'visit_create', 'visit_update', 'visit_delete', 'visit_restore',
                        'vaccine_add', 'vaccine_update', 'vaccine_delete', 'vaccine_restore',
@@ -55,7 +55,7 @@ require 'includes/header.php';
 <form method="get" class="vp-toolbar" id="auditFilter" data-search-form data-search-key="audit">
   <div class="vp-search">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-    <input type="text" name="q" id="auditSearch" data-search-input value="<?= e($q) ?>" placeholder="Search by user, action, details, or IP…" autocomplete="off">
+    <input type="text" name="q" id="auditSearch" data-search-input data-appt-code value="<?= e($q) ?>" placeholder="Search by user, action, details, or IP…" autocomplete="off">
   </div>
   <!-- Keeps the active category when the search box submits. -->
   <input type="hidden" name="group" value="<?= e($group) ?>">

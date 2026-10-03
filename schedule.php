@@ -13,6 +13,7 @@ require_staff();
 $PAGE = 'schedule';
 $PAGE_TITLE = 'Appointment Schedule';
 
+freeze_past_days($pdo);   // save every finished day before anything is shown or changed
 $slotRows = $pdo->query("SELECT id, start_time, end_time, capacity FROM appt_time_slots ORDER BY start_time")->fetchAll();
 $weekdays = appt_open_weekdays();
 $specials = $pdo->query("SELECT id, the_date, is_open, note FROM appt_special_dates ORDER BY the_date")->fetchAll();
@@ -51,11 +52,19 @@ foreach ($st as $r) $calSpecial[$r['the_date']] = $r;
 
 $calOver = appt_day_slot_overrides($calFirst, $calLast);
 
+// Finished days are shown from their saved snapshot (their last edit).
+$frozen = [];
+try {
+    $st = $pdo->prepare("SELECT the_date, day_open, note, slots FROM appt_day_frozen WHERE the_date BETWEEN ? AND ?");
+    $st->execute([$calFirst, $calLast]);
+    foreach ($st as $r) $frozen[$r['the_date']] = $r;
+} catch (Throwable $e) {}
+
 // Places taken per date and slot — same rule as booking: everything but
-// Declined holds a place.
+// Declined or Cancelled holds a place.
 $calUsed = [];
 $st = $pdo->prepare("SELECT a.appt_date, a.appt_time, COUNT(*) n FROM appointments a JOIN patients p ON p.id = a.patient_id
-                     WHERE a.appt_date BETWEEN ? AND ? AND a.status <> 'Declined' AND p.deleted_at IS NULL
+                     WHERE a.appt_date BETWEEN ? AND ? AND a.status NOT IN ('Declined','Cancelled','Expired') AND p.deleted_at IS NULL
                      GROUP BY a.appt_date, a.appt_time");
 $st->execute([$calFirst, $calLast]);
 foreach ($st as $r) $calUsed[$r['appt_date']][$r['appt_time']] = (int)$r['n'];
@@ -65,34 +74,50 @@ for ($ts = strtotime($calFirst); $ts <= strtotime($calLast); $ts = strtotime('+1
     $d    = date('Y-m-d', $ts);
     $wOpen = false;   // nothing is open until the admin opens it
     $sp   = $calSpecial[$d] ?? null;
+    $fz   = $frozen[$d] ?? null;
+    $srcRows = $slotRows; $fzOv = [];
+    if ($fz) {
+        // As the day stood when it ended — not today's slot settings.
+        $sp = ['is_open' => (int)$fz['day_open'], 'note' => $fz['note']];
+        $srcRows = [];
+        foreach ((array)json_decode($fz['slots'], true) as $z) {
+            $srcRows[] = ['id' => 0, 'start_time' => $z['t'], 'end_time' => $z['e'], 'capacity' => $z['cap']];
+            $fzOv[$z['t']] = ['open' => (bool)$z['open'], 'cap' => $z['cap']];
+        }
+    }
     $open = $sp ? (bool)$sp['is_open'] : $wOpen;
-    $slots = []; $booked = 0; $left = 0; $unlimited = false; $anyOpen = false; $custom = false;
-    foreach ($slotRows as $s) {
+    $slots = []; $nStarted = 0; $booked = 0; $left = 0; $unlimited = false; $anyOpen = false; $custom = false;
+    foreach ($srcRows as $s) {
         $t    = $s['start_time'];
         $def  = $s['capacity'] === null ? null : (int)$s['capacity'];
-        $ov   = $calOver[$d][$t] ?? null;
+        $ov   = $fzOv[$t] ?? ($calOver[$d][$t] ?? null);
         $sOpen = $ov ? $ov['open'] : true;
         $cap  = $ov ? $ov['cap'] : $def;
         $used = $calUsed[$d][$t] ?? 0;
         $booked += $used;
         if ($ov && (!$ov['open'] || $ov['cap'] !== $def)) $custom = true;   // only real differences get the dot
-        if ($sOpen) {
+        // Today's slots that have already started can't be booked any more.
+        $started = $d === $today && $t <= date('H:i:s');
+        if ($started) $nStarted++;
+        if ($sOpen && !$started) {
             $anyOpen = true;
             if ($cap === null) $unlimited = true; else $left += max(0, $cap - $used);
         }
         $slots[] = ['id' => (int)$s['id'], 't' => $t, 'label' => slot_label($t, $s['end_time']), 'open' => $sOpen,
-                    'cap' => $cap, 'def' => $def, 'used' => $used];
+                    'cap' => $cap, 'def' => $def, 'used' => $used, 'started' => $started];
     }
     // Bookings at times that are no longer a slot still count as booked.
     foreach ($calUsed[$d] ?? [] as $t => $n) {
         if (!array_filter($slotRows, fn($s) => $s['start_time'] === $t)) $booked += $n;
     }
-    $state = $d < $today ? 'past'
+    // Once every slot today has started there is nothing left to change today.
+    $dayOver = $fz || $d < $today || ($d === $today && $slots && $nStarted === count($slots));
+    $state = $dayOver ? 'past'
            : (!$open || !$anyOpen ? 'closed'
            : ($unlimited || $left > 0 ? 'open' : 'full'));
     $calDays[$d] = [
         'date' => $d, 'label' => date('l, F j, Y', $ts), 'dow' => date('l', $ts),
-        'past' => $d < $today, 'weekdayOpen' => $wOpen, 'open' => $open,
+        'past' => $dayOver, 'weekdayOpen' => $wOpen, 'open' => $open,
         'note' => $sp['note'] ?? '', 'custom' => $custom, 'booked' => $booked,
         'holiday' => ($h = ph_holiday_on($d)) ? $h + ['typeLabel' => ph_holiday_type_label($h['type'])] : null,
         'state' => $state, 'left' => $unlimited ? null : $left, 'slots' => $slots,
@@ -107,6 +132,7 @@ function sched_icon($name) {
         'trash' => '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
         'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
         'cal'   => '<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>',
+        'eye'   => '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
         'week'  => '<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M7 13h2M11 13h2M15 13h2M7 17h2M11 17h2"/>',
     ][$name];
     return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $p . '</svg>';
@@ -126,9 +152,16 @@ require 'includes/header.php';
   <div class="vp-card-head vp-scal-top">
     <h3><?= sched_icon('cal') ?> Calendar</h3>
     <div class="vp-scal-nav">
-      <a class="vp-cal-nav" href="schedule.php?m=<?= e($calPrev) ?>" aria-label="Previous month">&#8249;</a>
-      <strong><?= e(date('F Y', strtotime($calFirst))) ?></strong>
-      <a class="vp-cal-nav" href="schedule.php?m=<?= e($calNext) ?>" aria-label="Next month">&#8250;</a>
+      <!-- Month picker: click to open the month grid, pick any month/year. -->
+      <form method="get" action="schedule.php" class="vp-report-jump">
+        <button type="button" class="vp-report-pick" onclick="var i=this.nextElementSibling;try{i.showPicker()}catch(e){i.focus();i.click()}">
+          <?= sched_icon('cal') ?>
+          <span><?= e(date('F Y', strtotime($calFirst))) ?></span>
+          <svg class="vp-ss-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <input class="vp-report-native" tabindex="-1" aria-hidden="true" type="month" name="m"
+               value="<?= e($calMonth) ?>" onchange="if(this.value)this.form.submit()">
+      </form>
       <?php if ($calMonth !== date('Y-m')): ?><a class="vp-btn-tiny ghost" href="schedule.php">This month</a><?php endif; ?>
     </div>
   </div>
@@ -142,15 +175,13 @@ require 'includes/header.php';
              : ($c['state'] === 'full' ? 'Full' : ($c['state'] === 'closed' ? 'Closed' : ''));
         $cls = 'vp-scal-day is-' . $c['state'] . ($c['custom'] ? ' is-custom' : '') . ($d === $today ? ' is-today' : '') . ($c['holiday'] ? ' is-holiday' : ''); ?>
       <div class="vp-scal-cell">
-        <button type="button" class="<?= $cls ?>" data-toggle="<?= e($d) ?>" data-open="<?= $c['open'] ? 1 : 0 ?>" aria-pressed="<?= $c['open'] ? 'true' : 'false' ?>"
-                title="<?= e($c['label']) ?> — click to <?= $c['open'] ? 'close' : 'open' ?><?= $c['holiday'] ? ' · ' . e($c['holiday']['name']) . ' (' . ph_holiday_type_label($c['holiday']['type']) . ')' : '' ?><?= $c['note'] !== '' ? ' · ' . e($c['note']) : '' ?>"<?= $c['past'] ? ' disabled' : '' ?>>
+        <button type="button" class="<?= $cls ?>" data-toggle="<?= e($d) ?>" data-past="<?= $c['past'] ? 1 : 0 ?>" data-open="<?= $c['open'] ? 1 : 0 ?>" aria-pressed="<?= $c['open'] ? 'true' : 'false' ?>"
+                title="<?= e($c['label']) ?> — <?= $c['past'] ? 'click to view' : 'click to ' . ($c['open'] ? 'close' : 'open') ?><?= $c['holiday'] ? ' · ' . e($c['holiday']['name']) . ' (' . ph_holiday_type_label($c['holiday']['type']) . ')' : '' ?><?= $c['note'] !== '' ? ' · ' . e($c['note']) : '' ?>"<?= '' ?>>
           <span class="vp-scal-num"><?= (int)substr($d, 8) ?><?php if ($c['holiday']): ?><svg class="vp-scal-flag" viewBox="0 0 24 24" fill="currentColor" aria-label="Holiday"><path d="M5 3v18M5 4h12l-2.5 4L17 12H5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><?php endif; ?><?php if ($c['note'] !== ''): ?><svg class="vp-note-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Note"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8.5 9h7M8.5 12.5h4"/></svg><?php endif; ?></span>
           <?php if ($sub): ?><span class="vp-scal-sub"><?= e($sub) ?></span><?php endif; ?>
           <?php if ($c['booked']): ?><span class="vp-scal-booked"><?= $c['booked'] ?> booked</span><?php endif; ?>
         </button>
-        <?php if (!$c['past']): ?>
-          <button type="button" class="vp-scal-edit" data-day="<?= e($d) ?>" title="Edit <?= e($c['label']) ?>" aria-label="Edit <?= e($c['label']) ?>"><?= sched_icon('edit') ?></button>
-        <?php endif; ?>
+        <button type="button" class="vp-scal-edit" data-day="<?= e($d) ?>" title="<?= $c['past'] ? 'View' : 'Edit' ?> <?= e($c['label']) ?>" aria-label="<?= $c['past'] ? 'View' : 'Edit' ?> <?= e($c['label']) ?>"><?= sched_icon($c['past'] ? 'eye' : 'edit') ?></button>
       </div>
     <?php endforeach; ?>
   </div>
@@ -278,14 +309,14 @@ foreach ($slotRows as $s) slot_modal('modal-slot-' . (int)$s['id'], $s);
             <div class="vp-scal-slots" id="daySlots"></div>
             <small class="vp-field-note">Untick a slot to stop bookings at that time on this day; leave places blank for no limit. Editing or deleting a time slot changes it on every day.</small>
           </div>
-          <div class="vp-field full"><label>Apply these settings to</label>
+          <div class="vp-field full" id="dayScopeField"><label>Apply these settings to</label>
             <select name="scope" id="dayScope"></select>
           </div>
         </div>
         <p class="vp-sched-warn vp-scal-warn" id="dayWarn" hidden></p>
         <div class="vp-form-actions">
-          <button type="button" class="vp-btn-ghost" data-close-modal>Cancel</button>
-          <button type="submit" class="vp-btn-primary">Save day</button>
+          <button type="button" class="vp-btn-ghost" data-close-modal id="dayCancel">Cancel</button>
+          <button type="submit" class="vp-btn-primary" id="daySave">Save day</button>
         </div>
       </div>
     </form>
@@ -311,6 +342,16 @@ foreach ($slotRows as $s) slot_modal('modal-slot-' . (int)$s['id'], $s);
   var DAYS = <?= json_encode($calDays, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
   var monthName = <?= json_encode(date('F', strtotime($calFirst))) ?>;
   var modal = document.getElementById('modal-day');
+  var INTRO = document.getElementById('dayIntro').textContent;
+  // "1 booked · 2 available · 3 total" — a slot with no limit has no
+  // available/total count, and a turned-off slot shows nothing.
+  function slotMeta(s) {
+    if (!s.open) return '';
+    var parts = [s.used + ' booked'];
+    if (s.cap === null) parts.push('no limit');
+    else parts.push(Math.max(0, s.cap - s.used) + ' available', s.cap + ' total');
+    return parts.join(' · ');
+  }
   var ICON_EDIT = <?= json_encode(sched_icon('edit')) ?>;
   var ICON_TRASH = <?= json_encode(sched_icon('trash')) ?>;
 
@@ -341,7 +382,8 @@ foreach ($slotRows as $s) slot_modal('modal-slot-' . (int)$s['id'], $s);
     btn.addEventListener('click', function () {
       // On phones the cells are too small for the pencil, so a tap opens
       // the day editor (it has the open/closed switch) instead.
-      if (phone.matches) {
+      // Past days (and today once every slot has started) can only be viewed.
+      if (phone.matches || btn.dataset.past === '1') {
         var pen = document.querySelector('.vp-scal-edit[data-day="' + btn.dataset.toggle + '"]');
         if (pen) { pen.click(); return; }
       }
@@ -355,7 +397,8 @@ foreach ($slotRows as $s) slot_modal('modal-slot-' . (int)$s['id'], $s);
   document.querySelectorAll('.vp-scal-edit[data-day]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var c = DAYS[btn.dataset.day];
-      if (!c || c.past) return;
+      if (!c) return;
+      var view = !!c.past;   // read-only: look but don't change
       $('dayTitle').textContent = c.label;
       $('dayDate').value = c.date;
       $('dayOpen1').checked = c.open;
@@ -367,11 +410,25 @@ foreach ($slotRows as $s) slot_modal('modal-slot-' . (int)$s['id'], $s);
       if (c.holiday) $('dayHoliday').textContent = 'Philippine holiday: ' + c.holiday.name + ' (' + c.holiday.typeLabel + ')';
       $('daySlots').innerHTML = c.slots.length ? c.slots.map(function (s) {
         var base = 'slots[' + s.t + ']';
+        if (s.started) {
+          // Already started today: shown switched off. Hidden fields keep its
+          // current setting, so saving the day can't change it.
+          return '<div class="vp-scal-slot is-started">'
+            + (s.open ? '<input type="hidden" name="' + base + '[open]" value="1">' : '')
+            + '<input type="hidden" name="' + base + '[cap]" value="' + (s.cap === null ? '' : s.cap) + '">'
+            + '<label class="vp-scal-slot-on"><input type="checkbox" disabled' + (s.open ? ' checked' : '') + '>'
+            + '<i class="vp-scal-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></i>'
+            + '<span>' + esc(s.label) + '</span></label>'
+            + '<span class="vp-scal-slot-used">' + slotMeta(s) + '</span>'
+            + '<input type="number" disabled placeholder="—" value="' + (s.cap === null ? '' : s.cap) + '">'
+            + '<span class="vp-scal-slot-act"></span>'
+            + '</div>';
+        }
         return '<div class="vp-scal-slot">'
           + '<label class="vp-scal-slot-on"><input type="checkbox" name="' + base + '[open]" value="1"' + (s.open ? ' checked' : '') + '>'
           + '<i class="vp-scal-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></i>'
           + '<span>' + esc(s.label) + '</span></label>'
-          + '<span class="vp-scal-slot-used">' + (s.used ? s.used + ' booked' : '') + '</span>'
+          + '<span class="vp-scal-slot-used">' + (view ? slotMeta(s) : (s.used ? s.used + ' booked' : '')) + '</span>'
           + '<input type="number" name="' + base + '[cap]" min="1" max="999" step="1" placeholder="No limit" aria-label="Places for ' + esc(s.label) + '"'
           + ' value="' + (s.cap === null ? '' : s.cap) + '">'
           + '<span class="vp-scal-slot-act">'
@@ -384,7 +441,16 @@ foreach ($slotRows as $s) slot_modal('modal-slot-' . (int)$s['id'], $s);
           '<option value="day">This day only</option>'
         + '<option value="weekday">Every ' + c.dow + ' in ' + monthName + ' (from this day on)</option>'
         + '<option value="month">Every day in ' + monthName + ' (from this day on)</option>';
+      // View mode: nothing can be changed, and there is nothing to save.
+      modal.classList.toggle('is-view', view);
+      ['dayOpen1', 'dayOpen0', 'dayNote', 'dayScope'].forEach(function (id) { $(id).disabled = view; });
+      if (view) $('daySlots').querySelectorAll('input, button').forEach(function (e) { e.disabled = true; });
+      $('dayIntro').textContent = view ? 'View only — this day has passed, so it can no longer be changed.' : INTRO;
+      $('dayCancel').textContent = view ? 'Close' : 'Cancel';
+      if (view) $('dayUsual').textContent = '';
+      $('dayNote').placeholder = view ? 'No note' : 'e.g. Christmas Day, Half day';
       syncOpen();
+      if (view) $('dayWarn').hidden = true;
       modal.classList.add('open');
     });
   });

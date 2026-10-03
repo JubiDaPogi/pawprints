@@ -94,6 +94,13 @@ unset($_SESSION['login_prefill']);
       </form>
 
       <p class="vp-login-signup">New user? <a href="signup.php">Register here</a></p>
+
+      <!-- Look up an appointment without signing in (needs its code + the account email). -->
+      <div class="vp-login-or"><span>or</span></div>
+      <a class="vp-login-track" href="track.php">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>
+        View appointment
+      </a>
     </div>
   </div>
 </div>

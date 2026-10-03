@@ -15,6 +15,7 @@ $row = $pdo->prepare("SELECT a.*, p.name AS pname FROM appointments a JOIN patie
 $row->execute([$id]);
 $a = $row->fetch();
 if (!$a) { set_flash('That appointment request no longer exists.'); redirect('../appointments.php'); }
+if ($a['status'] === 'Expired') { set_flash('That request has expired — its appointment time has passed, so it can no longer be approved.'); redirect('../appointments.php'); }
 if ($a['status'] !== 'Pending') { set_flash('That request has already been handled.'); redirect('../appointments.php'); }
 
 // A pending request already holds its place, so approving normally can't
@@ -26,9 +27,10 @@ if (!slot_has_room($a['appt_date'], $a['appt_time'], $id)) {
 }
 
 $pdo->prepare("UPDATE appointments SET status = 'Scheduled' WHERE id = ?")->execute([$id]);
+$code = assign_appt_code($pdo, $id);
 
 record_audit($pdo, 'appt_approve', $id, $a['pname'],
-    'Approved ' . $a['pname'] . "'s appointment request for " . fmt_date($a['appt_date']) . ' at ' . fmt_time($a['appt_time']));
+    'Approved ' . $a['pname'] . "'s appointment request" . ($code ? ' (' . $code . ')' : '') . ' for ' . fmt_date($a['appt_date']) . ' at ' . fmt_time($a['appt_time']));
 
-set_flash('Appointment approved and scheduled.');
+set_flash('Appointment approved and scheduled' . ($code ? ' — code ' . $code : '') . '.');
 redirect('../appointments.php');

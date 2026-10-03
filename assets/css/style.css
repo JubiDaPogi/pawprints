@@ -2351,7 +2351,7 @@ a.vp-cal-nav { display: inline-flex; align-items: center; justify-content: cente
 .vp-scal-slot-on input { width: 17px !important; height: 17px; accent-color: #1f8a4c; padding: 0 !important; }
 .vp-scal-slot-used { grid-area: used; font-size: 12px; color: var(--ink-3); }
 .vp-field .vp-scal-slot input[type="number"] { grid-area: cap; padding: 7px 9px; font-size: 13.5px; }
-.vp-scal-slot:has(input[type="checkbox"]:not(:checked)) .vp-scal-slot-on span { color: var(--ink-3); text-decoration: line-through; }
+.vp-scal-slot:has(input[type="checkbox"]:not(:checked)) .vp-scal-slot-on span { color: var(--ink-3); }
 .vp-scal-slot:has(input[type="checkbox"]:not(:checked)) input[type="number"] { opacity: .45; }
 #daySlotsField.is-off { opacity: .45; pointer-events: none; }
 .vp-scal-warn { margin: 14px 0 0; font-size: 13px; }
@@ -2807,3 +2807,198 @@ a.vp-cal-nav { display: inline-flex; align-items: center; justify-content: cente
   .vp-top-date svg { width: 12px; height: 12px; }
   .vp-top-bell { width: 38px; height: 38px; }
 }
+
+/* Appointment code (APT-20261020-002), given on approval */
+.vp-appt-code {
+  display: inline-flex; align-items: center; align-self: flex-start; gap: 4px; margin-top: 4px;
+  padding: 2px 8px; border-radius: 6px; background: var(--paper); border: 1px solid var(--line);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; font-weight: 600;
+  color: var(--ink-2); letter-spacing: .02em; white-space: nowrap; width: fit-content;
+}
+.vp-appt-code.pending { font-family: inherit; font-weight: 500; font-style: italic; color: var(--ink-3); background: transparent; border-style: dashed; }
+
+/* Owner cancel */
+.vp-btn-cancel:hover { color: var(--rose); border-color: var(--rose); background: var(--rose-soft); }
+.vp-btn-danger-solid { background: var(--rose) !important; border-color: var(--rose) !important; }
+.vp-btn-danger-solid:hover { background: #b04a5b !important; }
+.vp-appt-declined-note.is-cancelled { color: var(--muted-fg); }
+.vp-appt-summary-5:has(> :nth-child(6)) { grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 1100px) { .vp-appt-summary-5:has(> :nth-child(6)) { grid-template-columns: repeat(3, 1fr); } }
+@media print { body[data-page="reports"] .vp-appt-summary-5 { grid-template-columns: repeat(6, 1fr) !important; } }
+/* Time picker switched off until a day is chosen */
+.vp-tp.is-disabled .vp-ss-trigger { opacity: .6; cursor: not-allowed; background: var(--paper); }
+.vp-tp.is-disabled .vp-ss-trigger:hover { border-color: var(--line); }
+.vp-tp-hint { color: var(--ink-3); font-weight: 500; }
+/* Day editor: slots that already started today are switched off */
+.vp-scal-slot.is-started { opacity: .55; }
+.vp-scal-slot.is-started .vp-scal-slot-on { cursor: not-allowed; }
+.vp-scal-slot.is-started .vp-scal-slot-on span { text-decoration: none; }
+.vp-scal-slot.is-started .vp-scal-slot-used { color: var(--ink-3); font-weight: 600; }
+.vp-scal-slot.is-started .vp-scal-check { background: var(--paper); border-color: var(--line); color: var(--ink-3); }
+
+/* Day editor in view-only mode (past days / today once every slot started) */
+#modal-day.is-view #daySave,
+#modal-day.is-view #dayScopeField,
+#modal-day.is-view .vp-scal-slots-head .vp-btn-tiny,
+#modal-day.is-view .vp-scal-slot-act,
+#modal-day.is-view .vp-hint-text { display: none !important; }
+#modal-day.is-view .vp-scal-slots-head + .vp-scal-slots { margin-top: 0; }
+#modal-day.is-view .vp-scal-toggle label span { cursor: default; }
+.vp-scal-day.is-past { cursor: pointer; }
+#modal-day.is-view .vp-scal-slots-head + .vp-scal-slots + .vp-field-note { display: none; }
+#modal-day.is-view .vp-scal-toggle { opacity: .85; pointer-events: none; }
+
+/* View-only day: everything is read-only but fully legible */
+#modal-day.is-view .vp-scal-slot.is-started { opacity: 1; }
+#modal-day.is-view .vp-scal-slot-on span { color: var(--ink); text-decoration: none; font-weight: 600; }
+#modal-day.is-view .vp-scal-slot-used { color: var(--ink-2); font-weight: 600; }
+#modal-day.is-view input:disabled { opacity: 1; color: var(--ink); -webkit-text-fill-color: var(--ink); background: var(--paper); }
+#modal-day.is-view input:disabled::placeholder { color: var(--ink-3); -webkit-text-fill-color: var(--ink-3); }
+#modal-day.is-view .vp-scal-toggle { opacity: 1; }
+#modal-day.is-view .vp-scal-toggle label span { color: var(--ink-2); }
+#modal-day.is-view .vp-scal-slot.is-started .vp-scal-check { background: var(--card); color: var(--ink-3); border-color: var(--line); }
+#modal-day.is-view .vp-scal-slot-on input:checked + .vp-scal-check,
+#modal-day.is-view .vp-scal-slot.is-started .vp-scal-slot-on input:checked + .vp-scal-check { background: #1f8a4c; border-color: #1f8a4c; color: #fff; }
+#modal-day.is-view .vp-scal-slots-head label, #modal-day.is-view .vp-field > label { color: var(--ink-2); }
+#modal-day.is-view .vp-scal-toggle input { opacity: 0 !important; }
+#modal-day.is-view .vp-scal-slot-on input[type="checkbox"] { opacity: 0 !important; }
+/* A slot that is switched off shows an empty box — no tick */
+#modal-day .vp-scal-slot-on input:not(:checked) + .vp-scal-check,
+#modal-day.is-view .vp-scal-slot.is-started .vp-scal-slot-on input:not(:checked) + .vp-scal-check { color: transparent !important; }
+/* View-only day: no places boxes — the "booked · available · total" text says it all */
+#modal-day.is-view .vp-scal-slot input[type="number"] { display: none; }
+#modal-day.is-view .vp-scal-slot { grid-template-columns: 1fr auto; grid-template-areas: "on used"; }
+#modal-day.is-view .vp-scal-slot-used { text-align: right; }
+
+/* Booking calendar: a day with a note keeps its text clear of the note icon
+   in the bottom-right corner (the text moves up, the icon sits below it). */
+.vp-cal-day.has-note { min-height: 58px; padding-bottom: 16px; }
+.vp-cal-noteico { bottom: 3px; right: 5px; }
+
+/* Month picker used as a calendar header (Schedule + booking calendar) */
+.vp-cal-head-pick { justify-content: center; }
+.vp-cal-head-pick .vp-report-jump, .vp-scal-nav .vp-report-jump { width: auto; }
+.vp-cal-head-pick .vp-report-pick { font-family: 'Fraunces', serif; font-size: 16px; }
+
+#apptFilterForm { position: relative; z-index: 25; }
+
+/* Public "View appointment" (sign-in page button + track.php) */
+.vp-login-or { display: flex; align-items: center; gap: 12px; margin: 18px 0 14px; color: var(--ink-3); font-size: 12.5px; }
+.vp-login-or::before, .vp-login-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.vp-login-track {
+  display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%;
+  padding: 13px 16px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card);
+  color: var(--ink); font-weight: 600; font-size: 14.5px; text-decoration: none; transition: .15s;
+}
+.vp-login-track:hover { border-color: var(--teal); color: var(--teal); }
+.vp-login-track svg { color: var(--teal); }
+.vp-track-card { max-width: 460px; }
+.vp-track-result { border: 1.5px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-top: 6px; background: var(--paper-2); }
+.vp-track-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.vp-track-top .vp-appt-code { margin: 0; font-size: 13.5px; padding: 4px 10px; }
+.vp-track-list { display: grid; grid-template-columns: 92px 1fr; gap: 9px 12px; margin: 0; font-size: 14.5px; }
+.vp-track-list dt { color: var(--ink-3); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding-top: 2px; }
+.vp-track-list dd { margin: 0; color: var(--ink); font-weight: 500; overflow-wrap: anywhere; }
+.vp-track-dim { color: var(--ink-3); font-weight: 400; }
+.vp-track-foot { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line-2); font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.vp-track-foot a { color: var(--teal); font-weight: 600; }
+.vp-track-again { display: flex; justify-content: center; width: 100%; margin-top: 14px; text-decoration: none; }
+
+/* Standalone pages (sign-up, forgot password, view appointment…) use the app's own font */
+.vp-setup-page { font-family: 'Outfit', system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+.vp-setup-page input, .vp-setup-page button, .vp-setup-page select, .vp-setup-page textarea { font-family: inherit; }
+
+/* Appointment code is a button: click to copy */
+button.vp-appt-code { cursor: pointer; transition: background .14s, border-color .14s, color .14s; }
+button.vp-appt-code:hover { border-color: var(--teal); color: var(--teal); background: var(--teal-soft); }
+button.vp-appt-code:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+button.vp-appt-code.is-copied { border-color: #1f8a4c; color: #1d6b43; background: #e3f4e9; }
+.vp-appt-info .vp-appt-kind { font-weight: 600; color: var(--ink-2); }
+
+/* ------------------------------------------------------------------
+   Sidebar hamburger (before the page title)
+------------------------------------------------------------------ */
+.vp-top-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.vp-menu-btn {
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center;
+  background: var(--card); border: 1px solid var(--line); color: var(--ink-2); cursor: pointer; transition: .15s;
+}
+.vp-menu-btn:hover { border-color: var(--teal); color: var(--teal); }
+.vp-menu-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.vp-side { transition: width .2s ease, padding .2s ease; }
+
+/* Desktop, collapsed: the same icon rail used on tablets. */
+@media (min-width: 841px) {
+  html.vp-side-collapsed .vp-side { width: 74px; padding: 18px 12px; }
+  html.vp-side-collapsed .vp-side-brand-text,
+  html.vp-side-collapsed .vp-nav-item span,
+  html.vp-side-collapsed .vp-user-meta,
+  html.vp-side-collapsed .vp-logout span { display: none; }
+  html.vp-side-collapsed .vp-side-brand { padding: 6px 0 18px; justify-content: center; }
+  html.vp-side-collapsed .vp-nav-item,
+  html.vp-side-collapsed .vp-user-chip,
+  html.vp-side-collapsed .vp-logout { justify-content: center; }
+  html.vp-side-collapsed .vp-nav-item { position: relative; }
+}
+
+/* Phones / tablets, opened: the full menu slides over the page. */
+@media (max-width: 840px) {
+  html.vp-side-open .vp-root { padding-left: 74px; }
+  html.vp-side-open .vp-side {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 300; width: 250px; padding: 22px 16px; overflow-y: auto;
+    box-shadow: 0 0 0 100vmax rgba(var(--overlay-dark-rgb), .38);
+  }
+  html.vp-side-open .vp-side-brand-text,
+  html.vp-side-open .vp-nav-item span,
+  html.vp-side-open .vp-user-meta,
+  html.vp-side-open .vp-logout span { display: revert; }
+  html.vp-side-open .vp-side-brand { padding: 6px 8px 22px; justify-content: flex-start; }
+  html.vp-side-open .vp-nav-item,
+  html.vp-side-open .vp-user-chip,
+  html.vp-side-open .vp-logout { justify-content: flex-start; }
+  .vp-menu-btn { width: 38px; height: 38px; }
+}
+@media print { .vp-menu-btn { display: none !important; } }
+@media (max-width: 840px) { html.vp-side-open .vp-side-brand-text { display: flex; flex-direction: column; } }
+/* Sidebar collapsed: the page content stretches into the freed space. */
+@media (min-width: 841px) { html.vp-side-collapsed .vp-stack { max-width: none; } }
+/* Icon-only sign out in the narrow sidebar (tablets/phones, or collapsed) */
+.vp-logout svg { flex-shrink: 0; }
+@media (max-width: 840px) { html:not(.vp-side-open) .vp-logout svg { width: 20px; height: 20px; } }
+@media (min-width: 841px) { html.vp-side-collapsed .vp-logout svg { width: 20px; height: 20px; } }
+
+/* ------------------------------------------------------------------
+   Phone header, with the hamburger: [☰ title ............ 🔔]
+                                     [........ date · time chip ]
+   (the old stacked right column squeezed the title underneath it)
+------------------------------------------------------------------ */
+@media (max-width: 680px) {
+  .vp-top { flex-wrap: wrap !important; align-items: center !important; row-gap: 8px; }
+  .vp-top-left { flex: 1 1 0 !important; min-width: 0; }
+  .vp-top-right { display: contents !important; }
+  .vp-top .vp-bell-wrap { order: 2; flex: 0 0 auto; }
+  .vp-top .vp-top-date { order: 3; flex: 0 0 auto; margin-left: auto; }
+  .vp-top-title { white-space: normal; overflow-wrap: break-word; font-size: 21px; }
+}
+
+/* Day editor on phones: time + buttons on the first line, "booked …" and the
+   places box on the second, so the time never wraps. */
+@media (max-width: 560px) {
+  #modal-day .vp-scal-slot { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "on act" "used cap"; row-gap: 6px; }
+  #modal-day .vp-scal-slot-on span { white-space: nowrap; }
+  #modal-day .vp-field .vp-scal-slot input[type="number"] { width: 96px; justify-self: end; }
+  #modal-day .vp-scal-slot-used { align-self: center; }
+  #modal-day.is-view .vp-scal-slot { grid-template-columns: 1fr; grid-template-areas: "on" "used"; }
+  #modal-day.is-view .vp-scal-slot-used { text-align: left; }
+}
+@media (max-width: 680px) {
+  .vp-top { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 8px; align-items: center; }
+  .vp-top-left { grid-column: 1; grid-row: 1; flex: none !important; }
+  .vp-top .vp-bell-wrap { grid-column: 2; grid-row: 1; order: 0; }
+  .vp-top .vp-top-date { grid-column: 1 / -1; grid-row: 2; justify-self: end; margin-left: 0; }
+}
+
+/* The app's own font everywhere — anything outside the main shell (the
+   notification panel, popups…) used to fall back to the browser's serif. */
+body { font-family: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--ink); }
+.vp-bell-panel { font-family: 'Outfit', system-ui, sans-serif; }

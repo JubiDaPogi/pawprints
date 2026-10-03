@@ -420,6 +420,7 @@ function render_patient_print_record($p, $vaccs = [], $visits = [], $opts = []) 
           <h2 class="vp-mr-sec">Client / Owner Information</h2>
           <table class="vp-mr-fields">
             <tr><th>Owner</th><td colspan="3"><?= e($ownerName) ?></td></tr>
+            <tr><th>Email</th><td colspan="3"><?= e($p['owner_email'] ?? '' ?: '—') ?></td></tr>
             <tr><th>Contact No.</th><td colspan="3"><?= e($p['owner_phone'] ?: '—') ?></td></tr>
             <tr><th>Address</th><td colspan="3"><?= e($p['owner_address'] ?? '' ?: '—') ?></td></tr>
           </table>

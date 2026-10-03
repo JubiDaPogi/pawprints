@@ -54,11 +54,13 @@ $stmt = $pdo->prepare("
 $stmt->execute([$pid, $date, $time, $reason]);
 
 $newId = (int)$pdo->lastInsertId();
+// Booked by staff = already approved, so it gets its code straight away.
+$code = assign_appt_code($pdo, $newId);
 $pname = $pdo->prepare("SELECT name FROM patients WHERE id = ?");
 $pname->execute([$pid]);
 $pname = $pname->fetchColumn();
 record_audit($pdo, 'appt_create', $newId, ($pname ?: null),
-    'Booked an appointment for ' . ($pname ?: 'patient #' . $pid) . ' on '
+    'Booked an appointment' . ($code ? ' (' . $code . ')' : '') . ' for ' . ($pname ?: 'patient #' . $pid) . ' on '
     . fmt_date($date) . ' at ' . fmt_time($time) . ' — ' . $reason);
-set_flash('Appointment scheduled');
+set_flash('Appointment scheduled' . ($code ? ' — code ' . $code : '') . '.');
 redirect('../appointments.php');

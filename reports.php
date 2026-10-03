@@ -312,6 +312,8 @@ require 'includes/header.php';
       <div class="vp-summary-item"><span class="vp-summary-num"><?= $ap('Scheduled') ?></span><span class="vp-summary-lbl">Scheduled</span></div>
       <div class="vp-summary-item"><span class="vp-summary-num"><?= $ap('Completed') ?></span><span class="vp-summary-lbl">Completed</span></div>
       <div class="vp-summary-item"><span class="vp-summary-num"><?= $ap('Declined') ?></span><span class="vp-summary-lbl">Declined</span></div>
+      <div class="vp-summary-item"><span class="vp-summary-num"><?= $ap('Cancelled') ?></span><span class="vp-summary-lbl">Cancelled</span></div>
+      <div class="vp-summary-item"><span class="vp-summary-num"><?= $ap('Expired') ?></span><span class="vp-summary-lbl">Expired</span></div>
       <div class="vp-summary-item"><span class="vp-summary-num"><?= $apTotal ?></span><span class="vp-summary-lbl">Total</span></div>
     </div>
     <p class="vp-report-note">
@@ -418,7 +420,7 @@ require 'includes/header.php';
       <table class="vp-mr-table">
         <thead><tr><th>Status</th><th class="num">Count</th></tr></thead>
         <tbody>
-          <?php foreach (['Pending', 'Scheduled', 'Completed', 'Declined'] as $k): ?>
+          <?php foreach (['Pending', 'Scheduled', 'Completed', 'Declined', 'Cancelled', 'Expired'] as $k): ?>
             <tr><td><?= $k ?></td><td class="num"><?= $ap($k) ?></td></tr>
           <?php endforeach; ?>
           <tr class="tot"><td>Total</td><td class="num"><?= $apTotal ?></td></tr>

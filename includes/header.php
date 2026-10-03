@@ -64,7 +64,7 @@ if ($staff) {
             'owner'  => format_name_formal($r['owner_first'], $r['owner_middle'], $r['owner_last']),
             'pet'    => $r['pet'] . ' · ' . $r['species'] . ' · ' . $r['breed'],
             'detail' => 'Requested: ' . ($r['reason'] ?: 'Appointment'),
-            'meta'   => fmt_date($r['appt_date']) . ' at ' . fmt_time($r['appt_time']),
+            'meta'   => fmt_date($r['appt_date']) . ' at ' . appt_time_range($r['appt_time']),
             'href'   => 'appointments.php?status=Pending',
         ];
     }
@@ -101,7 +101,7 @@ foreach ($nStmt->fetchAll() as $r) {
         'owner'  => format_name_formal($r['owner_first'], $r['owner_middle'], $r['owner_last']),
         'pet'    => $r['pet'] . ' · ' . $r['species'] . ' · ' . $r['breed'],
         'detail' => $r['reason'] ?: 'Appointment',
-        'meta'   => 'Today at ' . fmt_time($r['appt_time']),
+        'meta'   => 'Today at ' . appt_time_range($r['appt_time']),
         'href'   => 'appointments.php',
     ];
 }
@@ -141,7 +141,7 @@ foreach ($nStmt->fetchAll() as $r) {
         'owner'  => format_name_formal($r['owner_first'], $r['owner_middle'], $r['owner_last']),
         'pet'    => $r['pet'] . ' · ' . $r['species'] . ' · ' . $r['breed'],
         'detail' => $r['reason'] ?: 'Appointment',
-        'meta'   => fmt_date($r['appt_date']) . ' at ' . fmt_time($r['appt_time']),
+        'meta'   => fmt_date($r['appt_date']) . ' at ' . appt_time_range($r['appt_time']),
         'href'   => 'appointments.php',
     ];
 }
@@ -238,7 +238,7 @@ try {
     $hasSeenCol = false;   // column not migrated yet — everything reads as seen
 }
 
-$clinicalActions = ['appt_create','appt_request','appt_approve','appt_decline','appt_complete',
+$clinicalActions = ['appt_create','appt_request','appt_approve','appt_decline','appt_cancel','appt_expire','appt_complete',
     'patient_create','patient_update','patient_delete','patient_restore',
     'visit_create','visit_update','visit_delete','visit_restore',
     'vaccine_add','vaccine_update','vaccine_delete','vaccine_restore',
@@ -251,6 +251,7 @@ $ownAccountActions = ['user_update','user_activate','user_deactivate','user_rest
 // Joins resolve each action's target to a patient (for links, and for
 // working out which owner it belongs to).
 $actSql = "SELECT l.*, u.first_name AS actor_first, u.last_name AS actor_last,
+                  a.status AS appt_status, a.appt_code AS appt_code, a.appt_date AS appt_day,
                   COALESCE(a.patient_id, vi.patient_id, vc.patient_id, pp.id) AS pid,
                   COALESCE(pa.owner_id, pvi.owner_id, pvc.owner_id, pp.owner_id) AS pet_owner
            FROM activity_log l
@@ -290,7 +291,12 @@ try {
 
         // Where clicking it should take you.
         if (strpos($act, 'appt_') === 0) {
-            $href = 'appointments.php' . ($staff && $act === 'appt_request' ? '?status=Pending' : '');
+            // Open that exact appointment: by its code if it has one, otherwise
+            // the list filtered to its CURRENT status (a request may since have
+            // been approved, declined, cancelled or expired).
+            if (!empty($r['appt_code']))      $href = 'appointments.php?status=All&q=' . rawurlencode($r['appt_code']);
+            elseif (!empty($r['appt_status'])) $href = 'appointments.php?status=' . rawurlencode($r['appt_status']);
+            else                                $href = 'appointments.php';
             $icon = 'cal';
         } elseif (strpos($act, 'vaccine_') === 0) {
             $href = $pid ? 'patient.php?id=' . $pid . '#vacc' : ($staff ? 'archive.php' : 'dashboard.php');
@@ -396,6 +402,7 @@ $flashType   = get_flash_type();
 <meta charset="UTF-8">
 <!-- Apply a saved color theme before first paint, so switching pages
      never flashes back to red for a frame. -->
+<script>(function(){try{if(localStorage.getItem('pp-side')==='collapsed')document.documentElement.classList.add('vp-side-collapsed');}catch(e){}})();</script>
 <script>(function(){try{var t=localStorage.getItem('pp-theme');if(t==='green'||t==='blue')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= e($PAGE_TITLE) ?> · Paw Prints Veterinary Clinic</title>
@@ -411,7 +418,7 @@ $flashType   = get_flash_type();
 <div class="vp-root">
 
   <!-- Sidebar -->
-  <aside class="vp-side">
+  <aside class="vp-side" id="vpSide">
     <div class="vp-side-brand">
       <div class="vp-logo-badge sm"><?= species_icon('paw', 20) ?></div>
       <div class="vp-side-brand-text">
@@ -468,9 +475,10 @@ $flashType   = get_flash_type();
           <span><?= e(role_label($user['role'] ?? '', $user['staff_title'] ?? null)) ?></span>
         </div>
       </a>
-      <a href="logout.php" class="vp-logout">
+      <a href="logout.php" class="vp-logout" title="Sign out" aria-label="Sign out"
+         data-confirm="Are you sure you want to sign out?" data-confirm-title="Sign out" data-confirm-yes="Sign out" data-confirm-tone="ok">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-        Sign out
+        <span>Sign out</span>
       </a>
       <div class="vp-side-version">v<?= e(APP_VERSION) ?></div>
     </div>
@@ -479,9 +487,16 @@ $flashType   = get_flash_type();
   <!-- Main column -->
   <main class="vp-main">
     <header class="vp-top">
+      <div class="vp-top-left">
+        <!-- Hamburger: collapses the sidebar to icons (desktop) or opens the
+             full menu over the page (phones / tablets). -->
+        <button type="button" class="vp-menu-btn" id="vpMenuBtn" aria-controls="vpSide" aria-expanded="true" aria-label="Collapse menu" title="Collapse menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
       <div>
         <div class="vp-top-eyebrow"><?= $staff ? 'Staff workspace' : 'Owner portal' ?></div>
         <h1 class="vp-top-title"><?= e($PAGE_TITLE) ?></h1>
+      </div>
       </div>
       <div class="vp-top-right">
         <?php /* Printing lives on the patient chart page only (the "Print chart" button there). */ ?>

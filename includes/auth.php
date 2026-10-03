@@ -91,6 +91,11 @@ function require_login() {
     if (!is_logged_in()) {
         redirect('index.php');
     }
+    // Housekeeping: requests nobody approved by their appointment time expire.
+    if (function_exists('expire_pending_appointments') && !empty($GLOBALS['pdo'])) {
+        require_once __DIR__ . '/audit.php';
+        expire_pending_appointments($GLOBALS['pdo']);
+    }
 }
 
 /** True if the current user is a pet owner. */

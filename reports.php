@@ -159,12 +159,34 @@ $maxSeries  = max([1, ...array_map(fn($r) => $r['n'], $series)]);
 $ap = fn($k) => (int)($apRows[$k] ?? 0);
 $apTotal = array_sum(array_map('intval', $apRows));
 
+/* ---- Printed (formal) report: a visit register for the period ---- */
+$regLimit = 200;
+$regSql = "SELECT v.visit_date, v.reason, v.diagnosis, v.vet, p.name AS pet, p.species,
+                  CONCAT_WS(', ', NULLIF(o.last_name,''), NULLIF(o.first_name,'')) AS owner
+           FROM visits v JOIN patients p ON p.id = v.patient_id JOIN owners o ON o.id = p.owner_id
+           WHERE v.deleted_at IS NULL AND p.deleted_at IS NULL"
+        . ($scoped ? " AND v.visit_date BETWEEN ? AND ?" : "")
+        . " ORDER BY v.visit_date ASC, v.id ASC LIMIT " . ($regLimit + 1);
+$st = $pdo->prepare($regSql);
+$st->execute($scoped ? [$from, $to] : []);
+$register = $st->fetchAll();
+$regMore  = count($register) > $regLimit;
+if ($regMore) array_pop($register);
+
+$reportNo   = 'RPT-' . date('Ymd-His');
+$issuedAt   = date('F j, Y \a\t g:i A');
+$me = current_user();
+$preparedBy = trim(($me['first_name'] ?? '') . ' ' . ($me['last_name'] ?? ''));
+$periodText = $scoped
+    ? ($period === 'weekly' ? 'Week of ' . $rangeLabel : $rangeLabel) . ' (' . fmt_date($from) . ($from !== $to ? ' – ' . fmt_date($to) : '') . ')'
+    : 'All records to date';
+
 require 'includes/header.php';
 ?>
 
 <!-- Period: dropdown (All time / Daily / Weekly / Monthly / Quarterly) and, for a
      period, arrows to step back and forward. -->
-<div class="vp-toolbar vp-report-bar">
+<div class="vp-toolbar vp-report-bar no-print">
   <div class="vp-filter-chips" data-label="Report">
     <?php foreach ($periods as $k => $label): ?>
       <a class="vp-chip <?= $period === $k ? 'active' : '' ?>" href="<?= e(report_url($k)) ?>"><?= e($label) ?></a>
@@ -192,7 +214,16 @@ require 'includes/header.php';
       <?php endif; ?>
     </form>
   <?php endif; ?>
+  <button type="button" class="vp-btn-ghost vp-report-print" onclick="window.print()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+    Print report
+  </button>
 </div>
+
+<p class="vp-print-period" hidden>
+  <strong><?= e($periods[$period]) ?> report</strong>
+  <?= $scoped ? ' — ' . e($period === 'weekly' ? 'Week of ' . $rangeLabel : $rangeLabel) . ' (' . e(fmt_date($from)) . ($from !== $to ? ' to ' . e(fmt_date($to)) : '') . ')' : ' — all records to date' ?>
+</p>
 
 <div class="vp-stat-row">
   <?php if (!$scoped): ?>
@@ -288,6 +319,158 @@ require 'includes/header.php';
       <?= $scoped ? 'Figures count visits, vaccines and appointments dated in this period.' : 'Data reflects the current clinic records stored in the database.' ?>
     </p>
   </div>
+</div>
+
+<!-- ============================================================
+     Formal printed report (hidden on screen; this is what prints).
+     Same paper style as the patient medical record.
+     ============================================================ -->
+<div class="vp-med-record vp-report-doc" aria-hidden="true">
+  <header class="vp-mr-letterhead">
+    <div class="vp-mr-clinic">
+      <div class="vp-mr-logo"><?= species_icon('paw', 30) ?></div>
+      <div class="vp-mr-clinic-text">
+        <h1><?= e(defined('CLINIC_NAME') ? CLINIC_NAME : 'Paw Prints Veterinary Clinic') ?></h1>
+        <p>Bantug, Roxas, Isabela</p>
+      </div>
+    </div>
+    <div class="vp-mr-docmeta">
+      <span class="vp-mr-doctitle"><?= e($periods[$period]) ?> Clinic Report</span>
+      <span class="vp-mr-recno">Report No. <?= e($reportNo) ?></span>
+      <span class="vp-mr-printed">Issued <?= e($issuedAt) ?></span>
+    </div>
+  </header>
+
+  <section class="vp-mr-section">
+    <table class="vp-mr-fields">
+      <tr><th>Reporting period</th><td><?= e($periodText) ?></td></tr>
+      <tr><th>Prepared by</th><td><?= e($preparedBy ?: '—') ?></td></tr>
+    </table>
+  </section>
+
+  <section class="vp-mr-section">
+    <h2 class="vp-mr-sec">I. Summary</h2>
+    <table class="vp-mr-table vp-rd-summary">
+      <thead><tr><th>Indicator</th><th class="num">Count</th></tr></thead>
+      <tbody>
+        <?php if ($scoped): ?>
+          <tr><td>Patients seen</td><td class="num"><?= $totPatients ?></td></tr>
+          <tr><td>Visits logged</td><td class="num"><?= $totVisits ?></td></tr>
+          <tr><td>Vaccines given</td><td class="num"><?= $totVacc ?></td></tr>
+          <tr><td>Appointments</td><td class="num"><?= $totAppts ?></td></tr>
+        <?php else: ?>
+          <tr><td>Patients on record</td><td class="num"><?= $totPatients ?></td></tr>
+          <tr><td>Registered owners</td><td class="num"><?= $totOwners ?></td></tr>
+          <tr><td>Visits logged</td><td class="num"><?= $totVisits ?></td></tr>
+          <tr><td>Vaccines given</td><td class="num"><?= $totVacc ?></td></tr>
+        <?php endif; ?>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="vp-mr-idblock">
+    <div class="vp-mr-panel">
+      <h2 class="vp-mr-sec">II. <?= $scoped ? 'Patients Seen by Species' : 'Patients by Species' ?></h2>
+      <?php if (!$bySpecies): ?><p class="vp-mr-empty">None in this period.</p><?php else: ?>
+      <table class="vp-mr-table">
+        <thead><tr><th>Species</th><th class="num">Patients</th><th class="num">Share</th></tr></thead>
+        <tbody>
+          <?php $spTot = array_sum(array_map(fn($r) => (int)$r['n'], $bySpecies)); foreach ($bySpecies as $r): ?>
+            <tr><td><?= e($r['species']) ?></td><td class="num"><?= (int)$r['n'] ?></td><td class="num"><?= $spTot ? round((int)$r['n'] / $spTot * 100) : 0 ?>%</td></tr>
+          <?php endforeach; ?>
+          <tr class="tot"><td>Total</td><td class="num"><?= $spTot ?></td><td class="num">100%</td></tr>
+        </tbody>
+      </table>
+      <?php endif; ?>
+    </div>
+    <div class="vp-mr-panel">
+      <h2 class="vp-mr-sec">III. <?= $scoped ? 'Status of Patients Seen' : 'Patient Status' ?></h2>
+      <?php if (!$byStatus): ?><p class="vp-mr-empty">None in this period.</p><?php else: ?>
+      <table class="vp-mr-table">
+        <thead><tr><th>Status</th><th class="num">Patients</th></tr></thead>
+        <tbody>
+          <?php foreach ($byStatus as $r): ?>
+            <tr><td><?= e($r['status']) ?></td><td class="num"><?= (int)$r['n'] ?></td></tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+      <?php endif; ?>
+    </div>
+  </section>
+
+  <section class="vp-mr-idblock">
+    <div class="vp-mr-panel">
+      <h2 class="vp-mr-sec">IV. <?= e($chartTitle) ?></h2>
+      <?php if (!$series): ?><p class="vp-mr-empty">No visits logged.</p><?php else: ?>
+      <table class="vp-mr-table">
+        <thead><tr><th><?= $period === 'monthly' ? 'Days' : ($period === 'yearly' || !$scoped ? 'Month' : 'Day') ?></th><th class="num">Visits</th></tr></thead>
+        <tbody>
+          <?php foreach ($series as $r): ?>
+            <tr><td><?= e($r['label']) ?></td><td class="num"><?= (int)$r['n'] ?></td></tr>
+          <?php endforeach; ?>
+          <tr class="tot"><td>Total</td><td class="num"><?= array_sum(array_column($series, 'n')) ?></td></tr>
+        </tbody>
+      </table>
+      <?php endif; ?>
+    </div>
+    <div class="vp-mr-panel">
+      <h2 class="vp-mr-sec">V. Appointments</h2>
+      <table class="vp-mr-table">
+        <thead><tr><th>Status</th><th class="num">Count</th></tr></thead>
+        <tbody>
+          <?php foreach (['Pending', 'Scheduled', 'Completed', 'Declined'] as $k): ?>
+            <tr><td><?= $k ?></td><td class="num"><?= $ap($k) ?></td></tr>
+          <?php endforeach; ?>
+          <tr class="tot"><td>Total</td><td class="num"><?= $apTotal ?></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="vp-mr-section">
+    <h2 class="vp-mr-sec">VI. Visit Register</h2>
+    <?php if (!$register): ?>
+      <p class="vp-mr-empty">No visits were logged in this period.</p>
+    <?php else: ?>
+      <table class="vp-mr-table">
+        <thead><tr><th>#</th><th>Date</th><th>Patient</th><th>Owner</th><th>Reason / Diagnosis</th><th>Attending</th></tr></thead>
+        <tbody>
+          <?php foreach ($register as $i => $v): ?>
+            <tr>
+              <td><?= $i + 1 ?></td>
+              <td class="nowrap"><?= e(fmt_date($v['visit_date'])) ?></td>
+              <td><?= e($v['pet']) ?> <span class="vp-rd-muted">(<?= e($v['species']) ?>)</span></td>
+              <td><?= e($v['owner']) ?></td>
+              <td><?= e($v['reason']) ?><?php if (trim((string)$v['diagnosis']) !== ''): ?><br><span class="vp-rd-muted"><?= e($v['diagnosis']) ?></span><?php endif; ?></td>
+              <td><?= e($v['vet'] ?: '—') ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+      <?php if ($regMore): ?><p class="vp-mr-note">Showing the first <?= $regLimit ?> visits — choose a shorter period for the full list.</p><?php endif; ?>
+    <?php endif; ?>
+  </section>
+
+  <footer class="vp-mr-footer">
+    <div class="vp-mr-sign vp-rd-sign">
+      <div class="vp-mr-sign-line">
+        <span class="vp-mr-sign-name"><?= e($preparedBy) ?></span>
+        <span class="vp-mr-sign-label">Prepared by (Signature over Printed Name)</span>
+      </div>
+      <div class="vp-mr-sign-line">
+        <span class="vp-mr-sign-name"></span>
+        <span class="vp-mr-sign-label">Noted by — Clinic Head / Veterinarian</span>
+      </div>
+      <div class="vp-mr-sign-line">
+        <span class="vp-mr-sign-name"></span>
+        <span class="vp-mr-sign-label">Date</span>
+      </div>
+    </div>
+    <p class="vp-mr-confidential">
+      Confidential — for internal use of <?= e(defined('CLINIC_NAME') ? CLINIC_NAME : 'Paw Prints Veterinary Clinic') ?>.
+      Figures are drawn from the clinic records at the time of issue. Report No. <?= e($reportNo) ?> &middot; Generated <?= e($issuedAt) ?>.
+    </p>
+  </footer>
 </div>
 
 <?php require 'includes/footer.php'; ?>

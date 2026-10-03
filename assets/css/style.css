@@ -2589,3 +2589,206 @@ a.vp-cal-nav { display: inline-flex; align-items: center; justify-content: cente
 .vp-report-pick-ico { display: flex; padding-left: 13px; }
 .vp-report-native { position: absolute; left: 0; bottom: 0; width: 100%; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
 .vp-report-range { display: none; }
+
+/* Reports printing */
+.vp-report-print { margin-left: auto; }
+.vp-print-period { display: none; }
+@media print {
+  .vp-print-period { display: block !important; margin: 0 0 14px; font-size: 13px; color: #333; }
+  .vp-print-period strong { color: var(--pine); }
+  body[data-page="reports"] .vp-stat-row { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 10px !important; }
+  body[data-page="reports"] .vp-grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
+  body[data-page="reports"] .vp-appt-summary-5 { grid-template-columns: repeat(5, 1fr) !important; }
+  body[data-page="reports"] .vp-col-chart { height: 170px; }
+}
+
+/* ---- Formal printed report (reports.php) ---- */
+@media print {
+  /* Print ONLY the formal document on the Reports page. */
+  body[data-page="reports"] .vp-content > .vp-print-head,
+  body[data-page="reports"] .vp-content > .vp-print-foot,
+  body[data-page="reports"] .vp-stack > *:not(.vp-report-doc) { display: none !important; }
+  body[data-page="reports"] .vp-report-doc {
+    display: block !important; color: #111;
+    font-family: "Georgia", "Times New Roman", serif; font-size: 10.5pt; line-height: 1.45;
+  }
+  .vp-report-doc .vp-mr-section { margin-bottom: 14px; }
+  .vp-report-doc .vp-mr-idblock { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 14px; }
+  .vp-report-doc .vp-mr-table th.num, .vp-report-doc .vp-mr-table td.num { text-align: right; width: 70px; }
+  .vp-report-doc .vp-mr-table tr.tot td { font-weight: 700; border-top: 1.5px solid #555; background: #fff !important; }
+  .vp-report-doc .vp-rd-summary { width: 60%; }
+  .vp-report-doc .vp-rd-muted { color: #666; font-size: 9pt; }
+  .vp-report-doc .nowrap { white-space: nowrap; }
+  .vp-report-doc .vp-mr-table tr { break-inside: avoid; }
+  .vp-report-doc .vp-mr-table thead { display: table-header-group; }   /* repeat headers on each page */
+  .vp-report-doc .vp-rd-sign { grid-template-columns: 1.4fr 1.4fr 1fr; gap: 22px; margin-top: 30px; }
+}
+
+/* Every print: plain white paper. The app's cream page background (and the
+   pale table striping on formal documents) is dropped so nothing prints
+   tinted. */
+@media print {
+  html, body, .vp-root, .vp-main, .vp-content, .vp-stack,
+  .vp-doc-page, .vp-doc, .vp-login,
+  .vp-med-record, .vp-med-record section, .vp-med-record table,
+  .vp-med-record td, .vp-med-record tr, .vp-mr-panel {
+    background: #fff !important;
+    background-image: none !important;
+  }
+  .vp-mr-table tbody tr:nth-child(even) td { background: #fff !important; }
+  .vp-mr-table th { background: #fff !important; }
+}
+
+/* ==================================================================
+   MOBILE PASS (≤ 640px) — fixes found by checking every page at 390px
+   ================================================================== */
+@media (max-width: 640px) {
+  /* Stat cards: two per row, compact (they took a full screen stacked). */
+  .vp-stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; }
+  .vp-stat-row .vp-stat-card, .vp-stat-row > * { padding: 14px 12px; gap: 10px; flex-direction: column; align-items: flex-start; min-width: 0; }
+  .vp-stat-row .vp-stat-icon { width: 34px; height: 34px; }
+  .vp-stat-row .vp-stat-value, .vp-stat-row .vp-stat-num { font-size: 24px; }
+  .vp-stat-row .vp-stat-label, .vp-stat-row .vp-stat-sub { overflow-wrap: anywhere; }
+
+  /* Patient chart vitals: two narrow tiles per row, icon above the value
+     so "38.6 °C" / "18.40 kg" fit instead of running off the screen. */
+  .vp-vitals { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; }
+  .vp-vital { flex-direction: column; align-items: flex-start; gap: 8px; padding: 13px 12px; min-width: 0; }
+  .vp-vital-icon { width: 32px; height: 32px; border-radius: 9px; }
+  .vp-vital-body { min-width: 0; width: 100%; }
+  .vp-vital-value { font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Record tabs: wrap onto two rows instead of scrolling sideways. */
+  .vp-rec-tabs { width: 100% !important; overflow: visible !important; flex-wrap: wrap; }
+  .vp-rec-tabs button { flex: 1 1 auto; justify-content: center; padding: 10px 10px; font-size: 13px; }
+
+  /* Appointment rows: owner, pet and email each get their own line. */
+  .vp-appt-full-top { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .vp-appt-full-top strong { white-space: normal; overflow: visible; font-size: 15px; line-height: 1.3; }
+  .vp-appt-full-top strong .vp-appt-email { display: block; margin: 2px 0 0; overflow-wrap: anywhere; }
+  .vp-appt-breed { white-space: normal; overflow: visible; }
+
+  /* Small appointment lists (dashboards): date, then details, then status. */
+  .vp-appt-mini .vp-appt-row { flex-wrap: wrap; row-gap: 6px; }
+  .vp-appt-mini .vp-appt-info { flex: 1 1 0; min-width: 0; }
+  .vp-appt-mini .vp-appt-info strong, .vp-appt-mini .vp-appt-info span { white-space: normal; overflow: visible; }
+
+  /* Data tables (User Accounts, Activity Log…): each row becomes a card;
+     the column name is shown beside each value (labels added by script). */
+  .vp-table-card { overflow: visible !important; }
+  .vp-table-card .vp-table, .vp-table-card .vp-table tbody { display: block; width: 100%; }
+  .vp-table-card .vp-table thead { display: none; }
+  .vp-table-card .vp-table tr { display: block; padding: 12px 14px; border-bottom: 1px solid var(--line-2); }
+  .vp-table-card .vp-table td { display: flex; align-items: flex-start; gap: 10px; padding: 4px 0 !important; border: 0 !important; width: auto !important; min-width: 0; overflow-wrap: anywhere; }
+  .vp-table-card .vp-table td[data-label]:not(:first-child)::before {
+    content: attr(data-label); flex: 0 0 92px; font-size: 11.5px; font-weight: 600; color: var(--ink-3);
+    text-transform: uppercase; letter-spacing: .04em; padding-top: 3px;
+  }
+  .vp-table-card .vp-table td:first-child { padding-bottom: 6px !important; }
+  .vp-table-card .vp-table td > * { min-width: 0; }
+
+  /* Schedule calendar: cells are too small for the pencil + status text,
+     so on phones a day shows its number and colour only, and tapping it
+     opens the day editor (which has the open/closed switch). */
+  .vp-scal-edit, .vp-scal-sub, .vp-scal-booked { display: none !important; }
+  .vp-scal-day { min-height: 44px; padding: 4px 2px; justify-content: center; }
+  .vp-scal-num { font-size: 14px; justify-content: center; }
+  .vp-scal-legend { gap: 8px 12px; font-size: 11.5px; }
+
+  /* Reports: the print button sits with the other controls, full width. */
+  .vp-report-print { margin-left: 0; width: 100%; justify-content: center; }
+}
+.vp-only-phone { display: none; }
+@media (max-width: 640px) {
+  .vp-only-phone { display: block; }
+  .vp-hide-phone { display: none !important; }
+  .vp-table-card .vp-role-tag, .vp-table-card .vp-pill { white-space: nowrap; }
+  .vp-table-card .vp-table td { flex-wrap: wrap; }
+}
+@media (max-width: 640px) {
+  /* Pet cards never force a minimum width wider than the screen. */
+  .vp-pet-grid, .vp-owner-block .vp-pet-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .vp-pet-card { min-width: 0; }
+  /* Patient chart header: smaller photo, name row wraps (status under name). */
+  .vp-chart-id { gap: 12px; min-width: 0; }
+  .vp-chart-id > div:not(.vp-chart-avatar) { min-width: 0; flex: 1; }
+  .vp-chart-avatar { width: 54px; height: 54px; border-radius: 14px; }
+  .vp-chart-name-row { flex-wrap: wrap; gap: 6px 10px; }
+  .vp-chart-sub, .vp-chart-owner { flex-wrap: wrap; overflow-wrap: anywhere; }
+}
+
+/* Sidebar theme switch, open: the X moves left and the three swatches sit in
+   the same row beside it, so nothing floats up over the divider line.
+   (On the narrow icon rail they still stack upward.) */
+@media (min-width: 841px) {
+  .vp-theme-switch:not(.vp-theme-switch-login):has(.vp-theme-trigger[aria-expanded="true"]) {
+    align-items: center; gap: 9px;
+  }
+  .vp-theme-switch:not(.vp-theme-switch-login):has(.vp-theme-trigger[aria-expanded="true"]) .vp-theme-panel {
+    position: static; transform: none; bottom: auto; left: auto;
+  }
+}
+
+/* Theme switch now lives in the top bar, just before the notification bell.
+   Open: the X stays first, the three swatches follow in the same row. */
+.vp-top-right .vp-theme-switch { margin: 0; display: flex; align-items: center; gap: 9px; }
+.vp-top-right .vp-theme-panel { position: static; transform: none; bottom: auto; left: auto; flex-direction: row !important; }
+.vp-top-right .vp-theme-trigger[aria-expanded="true"] { color: var(--ink); }
+.vp-top-right .vp-theme-dot { border-color: var(--card); }
+.vp-top-right .vp-theme-dot[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink), 0 2px 8px rgba(0,0,0,.25); }
+@media (max-width: 680px) { .vp-top-right .vp-theme-switch { margin-right: auto; } }
+@media (max-width: 680px) {
+  /* Switch + bell + date share the row without the date wrapping. */
+  .vp-top-right { flex-wrap: wrap; gap: 10px 12px; justify-content: flex-start; }
+  .vp-top-date { white-space: nowrap; }
+  .vp-top-right .vp-theme-switch { margin-right: 0; }
+}
+
+/* Open (top bar): swatches first, then the X in a white circle at the end,
+   right beside the bell. */
+.vp-top-right .vp-theme-panel { order: -1; }
+.vp-top-right .vp-theme-trigger[aria-expanded="true"] {
+  background: var(--card); border-color: var(--line); color: var(--ink);
+  width: 38px; height: 38px; box-shadow: var(--shadow-sm);
+}
+.vp-top-right .vp-theme-trigger[aria-expanded="true"] svg { width: 20px; height: 20px; }
+.vp-top-right .vp-theme-dot { width: 34px; height: 34px; }
+/* Open: just the bare X — no white circle behind it. */
+.vp-top-right .vp-theme-trigger[aria-expanded="true"] { background: transparent; border-color: transparent; box-shadow: none; }
+/* The X is as big as a colour circle (34px), like on the sign-in page. */
+.vp-top-right .vp-theme-trigger[aria-expanded="true"] { width: 34px; height: 34px; }
+.vp-top-right .vp-theme-trigger[aria-expanded="true"] svg { width: 34px; height: 34px; flex-shrink: 0; }
+
+/* Where the theme switch lives: the top bar on desktop; the side rail
+   (the narrow icon bar) on phones and tablets. */
+.vp-theme-switch.vp-theme-side { display: none; }
+@media (max-width: 840px) {
+  .vp-top-right .vp-theme-switch { display: none !important; }
+  .vp-theme-switch.vp-theme-side { display: flex; justify-content: center; margin-bottom: 14px; }
+  .vp-theme-side .vp-theme-trigger[aria-expanded="true"] { color: #fff; }
+  .vp-theme-side .vp-theme-panel { flex-direction: column; }
+}
+
+/* The X mark spans the full diameter of a colour circle (the icon's drawn X
+   only fills half of its box, so the box is twice the circle's size). */
+.vp-top-right .vp-theme-trigger[aria-expanded="true"],
+.vp-theme-side .vp-theme-trigger[aria-expanded="true"] { overflow: visible; }
+.vp-top-right .vp-theme-trigger[aria-expanded="true"] svg,
+.vp-theme-side .vp-theme-trigger[aria-expanded="true"] svg {
+  width: 200%; height: 200%; max-width: none; flex-shrink: 0; stroke-width: 1.4;
+}
+.vp-theme-side .vp-theme-trigger[aria-expanded="true"] { width: 26px; height: 26px; }
+/* Final X size: a little under a circle's width (the icon box is 1.4× the
+   circle; the drawn X fills half of that). */
+.vp-top-right .vp-theme-trigger[aria-expanded="true"] svg,
+.vp-theme-side .vp-theme-trigger[aria-expanded="true"] svg { width: 140%; height: 140%; stroke-width: 2; }
+
+/* Top bar + side rail: circles and X exactly as on the sign-in page —
+   26px circles, 26px X mark. (Overrides every earlier size tweak.) */
+.vp-top-right .vp-theme-dot { width: 26px; height: 26px; }
+.vp-top-right .vp-theme-trigger,
+.vp-top-right .vp-theme-trigger[aria-expanded="true"],
+.vp-theme-side .vp-theme-trigger,
+.vp-theme-side .vp-theme-trigger[aria-expanded="true"] { width: 26px; height: 26px; }
+.vp-top-right .vp-theme-trigger[aria-expanded="true"] svg,
+.vp-theme-side .vp-theme-trigger[aria-expanded="true"] svg { width: 26px; height: 26px; stroke-width: 2.6; }

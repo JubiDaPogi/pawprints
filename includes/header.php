@@ -437,7 +437,8 @@ $flashType   = get_flash_type();
     </nav>
 
     <div class="vp-side-foot">
-      <div class="vp-theme-switch">
+      <!-- Phones and tablets: the theme switch lives in the side rail. -->
+      <div class="vp-theme-switch vp-theme-side">
         <button type="button" class="vp-theme-trigger" aria-haspopup="true" aria-expanded="false" aria-label="Choose color theme">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
@@ -484,6 +485,17 @@ $flashType   = get_flash_type();
       </div>
       <div class="vp-top-right">
         <?php /* Printing lives on the patient chart page only (the "Print chart" button there). */ ?>
+        <!-- Theme switch, just before the notification bell. -->
+      <div class="vp-theme-switch">
+        <button type="button" class="vp-theme-trigger" aria-haspopup="true" aria-expanded="false" aria-label="Choose color theme">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <div class="vp-theme-panel" role="group" aria-label="Color theme" hidden>
+          <button type="button" class="vp-theme-dot" data-theme-choice="red" aria-label="Red theme"></button>
+          <button type="button" class="vp-theme-dot" data-theme-choice="green" aria-label="Green theme"></button>
+          <button type="button" class="vp-theme-dot" data-theme-choice="blue" aria-label="Blue theme"></button>
+        </div>
+      </div>
         <div class="vp-bell-wrap">
           <button type="button" class="vp-top-bell" id="vpBellBtn"
                   aria-label="Notifications<?= $navBellCount ? ' (' . $navBellCount . ' new)' : '' ?>"

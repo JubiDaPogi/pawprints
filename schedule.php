@@ -132,7 +132,8 @@ require 'includes/header.php';
       <?php if ($calMonth !== date('Y-m')): ?><a class="vp-btn-tiny ghost" href="schedule.php">This month</a><?php endif; ?>
     </div>
   </div>
-  <p class="vp-hint-text vp-scal-hint">Click a day to switch it <strong>open (green)</strong> or <strong>closed (red)</strong>. Use the pencil on a day to edit it — add a note, turn single time slots off, change how many places each slot has, or apply a change to that weekday or the whole month.</p>
+  <p class="vp-hint-text vp-scal-hint vp-only-phone">Tap a day to edit it — open or close it, add a note, turn time slots off or change how many places each slot has. <strong>Green</strong> = open, <strong>red</strong> = closed.</p>
+  <p class="vp-hint-text vp-scal-hint vp-hide-phone">Click a day to switch it <strong>open (green)</strong> or <strong>closed (red)</strong>. Use the pencil on a day to edit it — add a note, turn single time slots off, change how many places each slot has, or apply a change to that weekday or the whole month.</p>
   <div class="vp-scal-grid">
     <?php foreach (['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] as $dn): ?><span class="vp-cal-dow"><?= $dn ?></span><?php endforeach; ?>
     <?php for ($i = 0, $lead = (int)date('w', strtotime($calFirst)); $i < $lead; $i++): ?><span></span><?php endfor; ?>
@@ -335,8 +336,15 @@ foreach ($slotRows as $s) slot_modal('modal-slot-' . (int)$s['id'], $s);
   }
 
   // Clicking a day flips it open <-> closed straight away.
+  var phone = window.matchMedia('(max-width: 640px)');
   document.querySelectorAll('.vp-scal-day[data-toggle]').forEach(function (btn) {
     btn.addEventListener('click', function () {
+      // On phones the cells are too small for the pencil, so a tap opens
+      // the day editor (it has the open/closed switch) instead.
+      if (phone.matches) {
+        var pen = document.querySelector('.vp-scal-edit[data-day="' + btn.dataset.toggle + '"]');
+        if (pen) { pen.click(); return; }
+      }
       $('toggleDate').value = btn.dataset.toggle;
       $('toggleOpen').value = btn.dataset.open === '1' ? '0' : '1';
       btn.disabled = true;

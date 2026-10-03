@@ -1067,6 +1067,18 @@
 })();
 </script>
 
+<!-- Phone layout for data tables: each row shows as a card, with the
+     column name next to each value. This copies the header text onto every
+     cell as data-label (the CSS shows it only on small screens). -->
+<script>
+document.querySelectorAll('.vp-table').forEach(function (t) {
+  var heads = Array.prototype.map.call(t.querySelectorAll('thead th'), function (th) { return th.textContent.replace(/\s+/g, ' ').trim(); });
+  t.querySelectorAll('tbody tr').forEach(function (tr) {
+    Array.prototype.forEach.call(tr.children, function (td, i) { if (heads[i] && !td.hasAttribute('data-label')) td.setAttribute('data-label', heads[i]); });
+  });
+});
+</script>
+
 <!-- Filter chips → dropdown. Every row of filter chips (species, status,
      category, role, archive tab) is shown as one dropdown instead. The chips
      stay in the page, hidden; choosing an option clicks the matching chip, so

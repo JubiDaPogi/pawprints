@@ -273,12 +273,30 @@ CREATE TABLE appt_day_slots (
 -- SEED DATA
 -- ============================================================
 
--- Owners ------------------------------------------------------
+-- Owners (20) -------------------------------------------------
+-- Owners 1–4 have pets and visit history below; 5–20 are registered
+-- clients with an owner account who can add their own pets.
 INSERT INTO owners (id, first_name, middle_name, last_name, phone, email, address, privacy_consent_at, privacy_consent_ver) VALUES
 (1, 'Maria', 'Cruz',    'Santos',    '0917-555-0142', 'maria.santos@email.com', 'Bantug, Roxas, Isabela',    NOW(), '2026-01'),
 (2, 'Jose',  'Ramos',   'Dela Cruz', '0918-555-0198', 'jose.dc@email.com',      'Rang-ayan, Roxas, Isabela', NOW(), '2026-01'),
 (3, 'Ana',   'Bautista','Reyes',     '0920-555-0176', 'ana.reyes@email.com',    'Poblacion, Roxas, Isabela', NOW(), '2026-01'),
-(4, 'Ramon', 'Bautista', 'Aquino',    '0915-555-0121', 'ramon.a@email.com',      'Bantug, Roxas, Isabela',    NOW(), '2026-01');
+(4, 'Ramon', 'Bautista', 'Aquino',    '0915-555-0121', 'ramon.a@email.com',      'Bantug, Roxas, Isabela',    NOW(), '2026-01'),
+(5, 'Liza', 'Mendoza', 'Garcia', '0916-555-0105', 'liza.garcia@email.com', 'Anao, Roxas, Isabela', NOW(), '2026-01'),
+(6, 'Mark', 'Villanueva', 'Torres', '0917-555-0106', 'mark.torres@email.com', 'Simimbaan, Roxas, Isabela', NOW(), '2026-01'),
+(7, 'Grace', 'Pascual', 'Flores', '0918-555-0107', 'grace.flores@email.com', 'Doña Concha, Roxas, Isabela', NOW(), '2026-01'),
+(8, 'Paolo', 'Navarro', 'Castillo', '0919-555-0108', 'paolo.castillo@email.com', 'Lanting, Roxas, Isabela', NOW(), '2026-01'),
+(9, 'Kristine', 'Santiago', 'Mercado', '0920-555-0109', 'kristine.mercado@email.com', 'Lucban, Roxas, Isabela', NOW(), '2026-01'),
+(10, 'Joel', 'Agustin', 'Ramirez', '0921-555-0110', 'joel.ramirez@email.com', 'Matusalem, Roxas, Isabela', NOW(), '2026-01'),
+(11, 'Angelica', 'Domingo', 'Soriano', '0922-555-0111', 'angelica.soriano@email.com', 'Muñoz East, Roxas, Isabela', NOW(), '2026-01'),
+(12, 'Rodel', 'Galang', 'Manalo', '0923-555-0112', 'rodel.manalo@email.com', 'Muñoz West, Roxas, Isabela', NOW(), '2026-01'),
+(13, 'Jasmine', 'Lopez', 'Aguilar', '0915-555-0113', 'jasmine.aguilar@email.com', 'San Antonio, Roxas, Isabela', NOW(), '2026-01'),
+(14, 'Carlo', 'Bernardo', 'Fernandez', '0916-555-0114', 'carlo.fernandez@email.com', 'San Pedro, Roxas, Isabela', NOW(), '2026-01'),
+(15, 'Rowena', 'Tolentino', 'Valdez', '0917-555-0115', 'rowena.valdez@email.com', 'Sotero Nuesa, Roxas, Isabela', NOW(), '2026-01'),
+(16, 'Dennis', 'Salazar', 'Gonzales', '0918-555-0116', 'dennis.gonzales@email.com', 'Vira, Roxas, Isabela', NOW(), '2026-01'),
+(17, 'Maricel', 'Ocampo', 'Rivera', '0919-555-0117', 'maricel.rivera@email.com', 'Villa Concepcion, Roxas, Isabela', NOW(), '2026-01'),
+(18, 'Arnel', 'Cabrera', 'Pineda', '0920-555-0118', 'arnel.pineda@email.com', 'San Rafael, Roxas, Isabela', NOW(), '2026-01'),
+(19, 'Sheila', 'Morales', 'Del Rosario', '0921-555-0119', 'sheila.delrosario@email.com', 'Imelda, Roxas, Isabela', NOW(), '2026-01'),
+(20, 'Noel', 'Ignacio', 'Bautista', '0922-555-0120', 'noel.bautista@email.com', 'Lalog, Roxas, Isabela', NOW(), '2026-01');
 
 -- Species -----------------------------------------------------
 INSERT INTO species (name) VALUES
@@ -329,10 +347,11 @@ INSERT INTO appointments (patient_id, appt_date, appt_time, reason, status) VALU
 
 -- ------------------------------------------------------------
 -- USERS
--- Default login credentials:
---   Staff  ->  username: admin      password: admin123   (full access)
---   Owners ->  username: maria / jose / ana / ramon
---              password (all four): owner123             (own account + pets)
+-- Default login credentials (sign in with the EMAIL address):
+--   Veterinarian (admin) -> clinic@pawprints.vet   password: admin123  (full access)
+--   Clinic staff         -> staff@pawprints.vet    password: staff123  (clinic workspace, no admin)
+--   Pet owners (20)      -> e.g. maria.santos@email.com, liza.garcia@email.com …
+--                           password (all owners): owner123            (own account + pets)
 --
 -- NOTE ON PASSWORDS: they are seeded here with a "plain:" marker
 -- so the accounts work the moment you import this file. The first
@@ -357,7 +376,25 @@ INSERT INTO users (password, role, staff_title, first_name, middle_name, last_na
 ('plain:owner123', 'owner', NULL,           'Maria', 'Cruz',     'Santos',    'maria.santos@email.com', '0917-555-0142', 1,    1, 0),
 ('plain:owner123', 'owner', NULL,           'Jose',  'Ramos',    'Dela Cruz', 'jose.dc@email.com',      '0918-555-0198', 2,    1, 0),
 ('plain:owner123', 'owner', NULL,           'Ana',   'Bautista', 'Reyes',     'ana.reyes@email.com',    '0920-555-0176', 3,    1, 0),
-('plain:owner123', 'owner', NULL,           'Ramon', 'Bautista',  'Aquino',    'ramon.a@email.com',      '0915-555-0121', 4,    1, 0);
+('plain:owner123', 'owner', NULL,           'Ramon', 'Bautista',  'Aquino',    'ramon.a@email.com',      '0915-555-0121', 4,    1, 0),
+('plain:owner123', 'owner', NULL,           'Liza', 'Mendoza', 'Garcia', 'liza.garcia@email.com', '0916-555-0105', 5, 1, 0),
+('plain:owner123', 'owner', NULL,           'Mark', 'Villanueva', 'Torres', 'mark.torres@email.com', '0917-555-0106', 6, 1, 0),
+('plain:owner123', 'owner', NULL,           'Grace', 'Pascual', 'Flores', 'grace.flores@email.com', '0918-555-0107', 7, 1, 0),
+('plain:owner123', 'owner', NULL,           'Paolo', 'Navarro', 'Castillo', 'paolo.castillo@email.com', '0919-555-0108', 8, 1, 0),
+('plain:owner123', 'owner', NULL,           'Kristine', 'Santiago', 'Mercado', 'kristine.mercado@email.com', '0920-555-0109', 9, 1, 0),
+('plain:owner123', 'owner', NULL,           'Joel', 'Agustin', 'Ramirez', 'joel.ramirez@email.com', '0921-555-0110', 10, 1, 0),
+('plain:owner123', 'owner', NULL,           'Angelica', 'Domingo', 'Soriano', 'angelica.soriano@email.com', '0922-555-0111', 11, 1, 0),
+('plain:owner123', 'owner', NULL,           'Rodel', 'Galang', 'Manalo', 'rodel.manalo@email.com', '0923-555-0112', 12, 1, 0),
+('plain:owner123', 'owner', NULL,           'Jasmine', 'Lopez', 'Aguilar', 'jasmine.aguilar@email.com', '0915-555-0113', 13, 1, 0),
+('plain:owner123', 'owner', NULL,           'Carlo', 'Bernardo', 'Fernandez', 'carlo.fernandez@email.com', '0916-555-0114', 14, 1, 0),
+('plain:owner123', 'owner', NULL,           'Rowena', 'Tolentino', 'Valdez', 'rowena.valdez@email.com', '0917-555-0115', 15, 1, 0),
+('plain:owner123', 'owner', NULL,           'Dennis', 'Salazar', 'Gonzales', 'dennis.gonzales@email.com', '0918-555-0116', 16, 1, 0),
+('plain:owner123', 'owner', NULL,           'Maricel', 'Ocampo', 'Rivera', 'maricel.rivera@email.com', '0919-555-0117', 17, 1, 0),
+('plain:owner123', 'owner', NULL,           'Arnel', 'Cabrera', 'Pineda', 'arnel.pineda@email.com', '0920-555-0118', 18, 1, 0),
+('plain:owner123', 'owner', NULL,           'Sheila', 'Morales', 'Del Rosario', 'sheila.delrosario@email.com', '0921-555-0119', 19, 1, 0),
+('plain:owner123', 'owner', NULL,           'Noel', 'Ignacio', 'Bautista', 'noel.bautista@email.com', '0922-555-0120', 20, 1, 0),
+-- Clinic staff (non-vet) account: full clinic workspace, no admin features.
+('plain:staff123', 'staff', 'staff',        'Carla', 'Domingo',  'Villanueva','staff@pawprints.vet',    '0917-555-0101', NULL, 1, 0);
 
 -- Activity log ------------------------------------------------
 -- A few starter entries so the Activity Log screen isn't empty on
